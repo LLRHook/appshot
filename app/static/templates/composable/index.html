@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Composable Screenshot</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ════════════════════════════════════════
+     BACKGROUNDS
+     ════════════════════════════════════════ */
+
+  /* Mesh gradient: blurred orbs on dark base */
+  .bg-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.6;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .orb-1 { width: 60vh; height: 60vh; top: -10vh; left: -10vh; }
+  .orb-2 { width: 50vh; height: 50vh; bottom: -5vh; right: -10vh; }
+  .orb-3 { width: 40vh; height: 40vh; top: 40%; left: 50%; transform: translateX(-50%); }
+
+  .bg-mesh body { background: #0a0a1a; }
+
+  /* Noise overlay */
+  .noise-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    opacity: 0.035;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    background-size: 256px 256px;
+  }
+  .has-noise .noise-overlay { display: block; }
+
+  /* ════════════════════════════════════════
+     FRAME: holds headline + device(s)
+     ════════════════════════════════════════ */
+
+  .frame {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    z-index: 2;
+  }
+
+  /* ════════════════════════════════════════
+     HEADLINE
+     ════════════════════════════════════════ */
+
+  .headline {
+    font-weight: 700;
+    line-height: 1.12;
+    letter-spacing: -0.02em;
+  }
+
+  .subtitle {
+    font-weight: 400;
+    font-size: 2.4vh;
+    line-height: 1.3;
+    opacity: 0.7;
+  }
+
+  /* ════════════════════════════════════════
+     DEVICE FRAMES
+     ════════════════════════════════════════ */
+
+  /* --- Bezel (realistic dark frame + Dynamic Island) --- */
+  .frame-bezel .device-frame {
+    position: relative;
+    background: #1a1a1a;
+    overflow: hidden;
+  }
+  .frame-bezel.device-iphone .device-frame {
+    border-radius: 4vh;
+    padding: 1.2vh;
+  }
+  .frame-bezel.device-ipad .device-frame {
+    border-radius: 2.5vh;
+    padding: 0.8vh;
+  }
+  .frame-bezel .device-screen {
+    width: 100%; height: 100%; overflow: hidden; position: relative;
+  }
+  .frame-bezel.device-iphone .device-screen { border-radius: 3.2vh; }
+  .frame-bezel.device-ipad .device-screen { border-radius: 1.8vh; }
+
+  .frame-bezel .dynamic-island {
+    position: absolute;
+    top: 1.4vh;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 12vh;
+    height: 3.2vh;
+    background: #000;
+    border-radius: 1.6vh;
+    z-index: 5;
+  }
+  .frame-bezel.device-iphone .dynamic-island { display: block; }
+  .frame-bezel.device-ipad .dynamic-island { display: none; }
+
+  /* --- Clay (matte colored frame, soft feel) --- */
+  .frame-clay .device-frame {
+    position: relative;
+    overflow: hidden;
+  }
+  .frame-clay.device-iphone .device-frame {
+    border-radius: 4.5vh;
+    padding: 1.8vh;
+  }
+  .frame-clay.device-ipad .device-frame {
+    border-radius: 3vh;
+    padding: 1.2vh;
+  }
+  .frame-clay .device-screen {
+    width: 100%; height: 100%; overflow: hidden; position: relative;
+  }
+  .frame-clay.device-iphone .device-screen { border-radius: 3vh; }
+  .frame-clay.device-ipad .device-screen { border-radius: 2vh; }
+  .frame-clay .dynamic-island { display: none; }
+
+  /* --- Wireframe (thin outline, transparent) --- */
+  .frame-wireframe .device-frame {
+    position: relative;
+    background: transparent;
+    overflow: hidden;
+  }
+  .frame-wireframe.device-iphone .device-frame {
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 3vh;
+  }
+  .frame-wireframe.device-ipad .device-frame {
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 2vh;
+  }
+  .frame-wireframe .device-screen {
+    width: 100%; height: 100%; overflow: hidden; position: relative;
+  }
+  .frame-wireframe .dynamic-island { display: none; }
+
+  /* --- None (bare screenshot with rounded corners) --- */
+  .frame-none .device-frame {
+    position: relative;
+    background: transparent;
+    overflow: hidden;
+  }
+  .frame-none .device-screen {
+    width: 100%; height: 100%; overflow: hidden; position: relative;
+    border-radius: 2.5vh;
+  }
+  .frame-none .dynamic-island { display: none; }
+
+  /* Shared image styling */
+  .device-screen img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  /* ════════════════════════════════════════
+     DEVICE GLOW
+     ════════════════════════════════════════ */
+  .device-glow {
+    position: absolute;
+    width: 120%;
+    height: 120%;
+    top: -10%;
+    left: -10%;
+    background: radial-gradient(ellipse at center, rgba(255,255,255,0.12) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .glow-none .device-glow { display: none; }
+  .glow-subtle .device-glow { opacity: 1; }
+  .glow-bright .device-glow { opacity: 1; }
+  .glow-bright .device-glow {
+    background: radial-gradient(ellipse at center, rgba(255,255,255,0.22) 0%, transparent 60%);
+  }
+
+  /* ════════════════════════════════════════
+     SHADOW DEPTHS
+     ════════════════════════════════════════ */
+  .shadow-none .device-frame { box-shadow: none; }
+  .shadow-subtle .device-frame {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  }
+  .shadow-medium .device-frame {
+    box-shadow: 0 12px 36px rgba(0,0,0,0.15), 0 4px 12px rgba(0,0,0,0.1);
+  }
+  .shadow-dramatic .device-frame {
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25), 0 8px 24px rgba(0,0,0,0.15);
+  }
+
+  /* ════════════════════════════════════════
+     LAYOUT: text-above
+     ════════════════════════════════════════ */
+  .layout-text-above .frame {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .layout-text-above .headline-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 15%;
+    width: 100%;
+    gap: 0.6vh;
+  }
+  .layout-text-above .headline {
+    font-size: 4.5vh;
+    text-align: center;
+    padding: 0 8%;
+  }
+  .layout-text-above .subtitle {
+    text-align: center;
+    padding: 0 10%;
+  }
+  .layout-text-above .device-area {
+    flex: 1;
+    width: 100%;
+    padding: 0 5% 2%;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .layout-text-above .device-frame {
+    height: 92%;
+    aspect-ratio: var(--screen-ratio);
+  }
+
+  /* ════════════════════════════════════════
+     LAYOUT: text-left
+     ════════════════════════════════════════ */
+  .layout-text-left .frame {
+    display: grid;
+    grid-template-columns: 40% 55%;
+    gap: 0 5%;
+    align-items: center;
+    height: 100%;
+  }
+  .layout-text-left .headline-area {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-left: 6%;
+    gap: 1vh;
+  }
+  .layout-text-left .headline {
+    font-size: 5vh;
+    text-align: left;
+    line-height: 1.15;
+  }
+  .layout-text-left .subtitle {
+    text-align: left;
+  }
+  .layout-text-left .device-area {
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-top: 8%;
+    position: relative;
+  }
+  .layout-text-left .device-frame {
+    height: 80vh;
+    aspect-ratio: var(--screen-ratio);
+  }
+
+  /* ════════════════════════════════════════
+     LAYOUT: text-right
+     ════════════════════════════════════════ */
+  .layout-text-right .frame {
+    display: grid;
+    grid-template-columns: 55% 40%;
+    gap: 0 5%;
+    align-items: center;
+    height: 100%;
+  }
+  .layout-text-right .headline-area {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    order: 2;
+    padding-right: 6%;
+    gap: 1vh;
+  }
+  .layout-text-right .headline {
+    font-size: 5vh;
+    text-align: right;
+    line-height: 1.15;
+  }
+  .layout-text-right .subtitle {
+    text-align: right;
+  }
+  .layout-text-right .device-area {
+    order: 1;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding-top: 6%;
+    position: relative;
+  }
+  .layout-text-right .device-frame {
+    height: 82vh;
+    aspect-ratio: var(--screen-ratio);
+  }
+
+  /* ════════════════════════════════════════
+     LAYOUT: split
+     ════════════════════════════════════════ */
+  .layout-split .frame {
+    display: grid;
+    grid-template-columns: 50% 45%;
+    grid-template-rows: 14% 1fr;
+    gap: 0 5%;
+    height: 100%;
+  }
+  .layout-split .headline-area {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6vh;
+  }
+  .layout-split .headline {
+    font-size: 4.5vh;
+    text-align: center;
+  }
+  .layout-split .subtitle {
+    text-align: center;
+  }
+  .layout-split .device-area {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding-left: 4%;
+    padding-top: 2%;
+    position: relative;
+  }
+  .layout-split .device-frame {
+    height: 76vh;
+    aspect-ratio: var(--screen-ratio);
+  }
+  .crop-card {
+    display: none;
+    overflow: hidden;
+    border-radius: 2.5vh;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.2), 0 6px 16px rgba(0,0,0,0.1);
+  }
+  .crop-card img {
+    display: block;
+    width: 200%;
+    height: 200%;
+    object-fit: cover;
+  }
+  .layout-split .crop-card {
+    display: block;
+    align-self: center;
+    width: 85%;
+    height: 55vh;
+    margin-right: 4%;
+  }
+
+  /* ════════════════════════════════════════
+     LAYOUT: centered (no headline)
+     ════════════════════════════════════════ */
+  .layout-centered .frame {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+  }
+  .layout-centered .headline-area {
+    display: none;
+  }
+  .layout-centered .device-area {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    padding: 5%;
+  }
+  .layout-centered .device-frame {
+    height: 85vh;
+    aspect-ratio: var(--screen-ratio);
+  }
+
+  /* ════════════════════════════════════════
+     LAYOUT: duo-side-by-side
+     ════════════════════════════════════════ */
+  .layout-duo-side-by-side .frame {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+  }
+  .layout-duo-side-by-side .headline-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 15%;
+    width: 100%;
+    gap: 0.6vh;
+  }
+  .layout-duo-side-by-side .headline {
+    font-size: 4.2vh;
+    text-align: center;
+    padding: 0 8%;
+  }
+  .layout-duo-side-by-side .subtitle {
+    text-align: center;
+    padding: 0 10%;
+  }
+  .layout-duo-side-by-side .devices-area {
+    flex: 1;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 3%;
+    width: 100%;
+    padding: 0 5% 2.5%;
+  }
+  .layout-duo-side-by-side .device-wrapper {
+    position: relative;
+    height: 90%;
+    aspect-ratio: var(--screen-ratio);
+  }
+  .layout-duo-side-by-side .device-frame {
+    width: 100%;
+    height: 100%;
+  }
+  /* Hide single device area in duo layouts */
+  .layout-duo-side-by-side .device-area { display: none; }
+  .layout-duo-side-by-side .crop-card { display: none; }
+
+  /* ════════════════════════════════════════
+     LAYOUT: duo-overlap
+     ════════════════════════════════════════ */
+  .layout-duo-overlap .frame {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+  }
+  .layout-duo-overlap .headline-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 15%;
+    width: 100%;
+    gap: 0.6vh;
+  }
+  .layout-duo-overlap .headline {
+    font-size: 4.2vh;
+    text-align: center;
+    padding: 0 8%;
+  }
+  .layout-duo-overlap .subtitle {
+    text-align: center;
+    padding: 0 10%;
+  }
+  .layout-duo-overlap .devices-area {
+    flex: 1;
+    position: relative;
+    width: 100%;
+    padding: 0 4% 3%;
+  }
+  .layout-duo-overlap .device-back {
+    position: absolute;
+    height: 85%;
+    left: 6%;
+    top: 0;
+    z-index: 1;
+    filter: brightness(0.92);
+    aspect-ratio: var(--screen-ratio);
+  }
+  .layout-duo-overlap .device-front-wrapper {
+    position: absolute;
+    height: 90%;
+    right: 5%;
+    bottom: 0;
+    z-index: 2;
+    aspect-ratio: var(--screen-ratio);
+  }
+  .layout-duo-overlap .device-front-glow {
+    position: absolute;
+    width: 140%;
+    height: 120%;
+    top: -10%;
+    left: -20%;
+    background: radial-gradient(ellipse at center, rgba(255,255,255,0.10) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .layout-duo-overlap .device-front {
+    height: 100%;
+    position: relative;
+    z-index: 2;
+  }
+  .layout-duo-overlap .device-front .device-frame {
+    width: 100%;
+    height: 100%;
+  }
+  /* Hide single device area in duo layouts */
+  .layout-duo-overlap .device-area { display: none; }
+  .layout-duo-overlap .crop-card { display: none; }
+
+  /* ════════════════════════════════════════
+     iPad overrides
+     ════════════════════════════════════════ */
+  .device-ipad.layout-text-above .headline { font-size: 5vh; }
+  .device-ipad.layout-text-above .device-frame { height: 88%; }
+  .device-ipad.layout-text-left .frame { grid-template-columns: 38% 58%; gap: 0 4%; }
+  .device-ipad.layout-text-left .headline { font-size: 5.5vh; }
+  .device-ipad.layout-text-left .device-frame { height: 75vh; }
+  .device-ipad.layout-text-right .frame { grid-template-columns: 58% 38%; gap: 0 4%; }
+  .device-ipad.layout-text-right .headline { font-size: 5.5vh; }
+  .device-ipad.layout-text-right .device-frame { height: 78vh; }
+  .device-ipad.layout-split .frame { grid-template-columns: 48% 47%; gap: 0 5%; }
+  .device-ipad.layout-split .headline { font-size: 5vh; }
+  .device-ipad.layout-split .device-frame { height: 70vh; }
+  .device-ipad.layout-split .crop-card { height: 48vh; }
+</style>
+</head>
+<body>
+  <!-- Mesh gradient orbs (hidden unless bg_type=mesh) -->
+  <div class="bg-orb orb-1" id="orb1" style="display:none"></div>
+  <div class="bg-orb orb-2" id="orb2" style="display:none"></div>
+  <div class="bg-orb orb-3" id="orb3" style="display:none"></div>
+
+  <!-- Noise texture overlay -->
+  <div class="noise-overlay"></div>
+
+  <div class="frame">
+    <div class="headline-area">
+      <h1 class="headline" id="headline"></h1>
+      <p class="subtitle" id="subtitle"></p>
+    </div>
+
+    <!-- Single device area (used by most layouts) -->
+    <div class="device-area">
+      <div class="device-glow"></div>
+      <div class="device-frame">
+        <div class="device-screen">
+          <img id="screenshot" src="" alt="App Screenshot" />
+        </div>
+        <div class="dynamic-island"></div>
+      </div>
+    </div>
+
+    <!-- Crop card for split layout -->
+    <div class="crop-card" id="crop-card">
+      <img id="crop-screenshot" src="" alt="Crop Detail" />
+    </div>
+
+    <!-- Duo devices area (used by duo layouts) -->
+    <div class="devices-area" id="devices-area" style="display:none">
+      <!-- duo-side-by-side: two wrappers -->
+      <div class="device-wrapper" id="duo-wrapper-1">
+        <div class="device-glow"></div>
+        <div class="device-frame">
+          <div class="device-screen">
+            <img id="screenshot-1" src="" alt="Screenshot 1" />
+          </div>
+          <div class="dynamic-island"></div>
+        </div>
+      </div>
+      <div class="device-wrapper" id="duo-wrapper-2">
+        <div class="device-glow"></div>
+        <div class="device-frame">
+          <div class="device-screen">
+            <img id="screenshot-2" src="" alt="Screenshot 2" />
+          </div>
+          <div class="dynamic-island"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Duo overlap specific structure -->
+    <div class="devices-area" id="overlap-area" style="display:none">
+      <div class="device-frame device-back" id="overlap-back">
+        <div class="device-screen">
+          <img id="screenshot-back" src="" alt="Screenshot 1" />
+        </div>
+        <div class="dynamic-island"></div>
+      </div>
+      <div class="device-front-wrapper">
+        <div class="device-front-glow"></div>
+        <div class="device-front">
+          <div class="device-frame" id="overlap-front">
+            <div class="device-screen">
+              <img id="screenshot-front" src="" alt="Screenshot 2" />
+            </div>
+            <div class="dynamic-island"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+
+    // ── Read all params ──
+    const bgType = params.get('bg_type') || 'linear-gradient';
+    const bgColor1 = '#' + (params.get('bg_color1') || 'D4A574');
+    const bgColor2 = '#' + (params.get('bg_color2') || '328983');
+    const bgColor3 = '#' + (params.get('bg_color3') || 'FD79A8');
+    const bgAngle = parseInt(params.get('bg_angle') || '135');
+
+    const frameStyle = params.get('frame_style') || 'bezel';
+    const device = params.get('device') || 'iphone';
+    const clayColor = '#' + (params.get('clay_color') || 'E8DED5');
+
+    const layout = params.get('layout') || 'text-above';
+
+    const headlineText = params.get('headline') || '';
+    const subtitleText = params.get('subtitle') || '';
+    const fontColor = '#' + (params.get('font_color') || 'FFFFFF');
+    const fontWeight = params.get('font_weight') || '700';
+
+    const shadow = params.get('shadow') || 'medium';
+    const glow = params.get('glow') || 'subtle';
+    const noise = params.get('noise') === '1';
+
+    // ── Apply background ──
+    if (bgType === 'linear-gradient') {
+      document.body.style.background = `linear-gradient(${bgAngle}deg, ${bgColor1}, ${bgColor2})`;
+    } else if (bgType === 'radial-gradient') {
+      document.body.style.background = `radial-gradient(circle at center, ${bgColor1}, ${bgColor2})`;
+    } else if (bgType === 'mesh') {
+      document.body.style.background = '#0a0a1a';
+      document.getElementById('orb1').style.display = 'block';
+      document.getElementById('orb2').style.display = 'block';
+      document.getElementById('orb3').style.display = 'block';
+      document.getElementById('orb1').style.background = bgColor1;
+      document.getElementById('orb2').style.background = bgColor2;
+      document.getElementById('orb3').style.background = bgColor3;
+    } else if (bgType === 'solid') {
+      document.body.style.background = bgColor1;
+    }
+
+    // ── Apply classes ──
+    document.body.classList.add(
+      `layout-${layout}`,
+      `device-${device}`,
+      `frame-${frameStyle}`,
+      `shadow-${shadow}`,
+      `glow-${glow}`
+    );
+
+    if (noise) document.body.classList.add('has-noise');
+
+    // ── Screen aspect ratio ──
+    const ratio = device === 'ipad' ? '3 / 4' : '9 / 19.5';
+    document.documentElement.style.setProperty('--screen-ratio', ratio);
+
+    // ── Clay frame color ──
+    if (frameStyle === 'clay') {
+      document.querySelectorAll('.device-frame').forEach(el => {
+        el.style.background = clayColor;
+      });
+    }
+
+    // ── Typography ──
+    const headlineEl = document.getElementById('headline');
+    headlineEl.textContent = headlineText;
+    headlineEl.style.color = fontColor;
+    headlineEl.style.fontWeight = fontWeight;
+
+    const subtitleEl = document.getElementById('subtitle');
+    subtitleEl.textContent = subtitleText;
+    subtitleEl.style.color = fontColor;
+    if (!subtitleText) subtitleEl.style.display = 'none';
+
+    // ── Layout-specific setup ──
+    const isDuo = layout === 'duo-side-by-side' || layout === 'duo-overlap';
+
+    if (layout === 'duo-side-by-side') {
+      document.getElementById('devices-area').style.display = '';
+      document.getElementById('screenshot-1').src = params.get('src_1') || '/demo-screenshot.png';
+      document.getElementById('screenshot-2').src = params.get('src_2') || '/demo-screenshot.png';
+    } else if (layout === 'duo-overlap') {
+      document.getElementById('overlap-area').style.display = '';
+      document.getElementById('screenshot-back').src = params.get('src_1') || '/demo-screenshot.png';
+      document.getElementById('screenshot-front').src = params.get('src_2') || '/demo-screenshot.png';
+    } else {
+      // Single device layouts
+      document.getElementById('screenshot').src = params.get('src') || '/demo-screenshot.png';
+
+      // Split layout: crop card
+      if (layout === 'split') {
+        const cropImg = document.getElementById('crop-screenshot');
+        if (cropImg) {
+          cropImg.src = params.get('src') || '/demo-screenshot.png';
+          const cropX = params.get('crop_x') || '50';
+          const cropY = params.get('crop_y') || '35';
+          cropImg.style.objectPosition = `${cropX}% ${cropY}%`;
+        }
+      }
+    }
+
+    // ── Receive images via postMessage ──
+    window.addEventListener('message', (e) => {
+      if (e.data?.type === 'setImages' && e.data.images) {
+        const images = e.data.images;
+        if (isDuo) {
+          if (layout === 'duo-overlap') {
+            if (images.src_1) document.getElementById('screenshot-back').src = images.src_1;
+            if (images.src_2) document.getElementById('screenshot-front').src = images.src_2;
+          } else {
+            if (images.src_1) document.getElementById('screenshot-1').src = images.src_1;
+            if (images.src_2) document.getElementById('screenshot-2').src = images.src_2;
+          }
+        } else {
+          if (images.src) {
+            document.getElementById('screenshot').src = images.src;
+            const cropImg = document.getElementById('crop-screenshot');
+            if (cropImg) cropImg.src = images.src;
+          }
+        }
+      }
+    });
+  </script>
+</body>
+</html>
