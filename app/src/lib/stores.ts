@@ -1,21 +1,4 @@
-import { writable } from 'svelte/store';
-import type { TemplateSchema } from './templates';
-import { getTemplateDefaults } from './templates';
-
 export type ParamValues = Record<string, string | number>;
-
-export function createParamStore(schema: TemplateSchema) {
-	const defaults = getTemplateDefaults(schema);
-	const store = writable<ParamValues>(defaults);
-
-	return {
-		...store,
-		reset: () => store.set(getTemplateDefaults(schema)),
-		mergeParams: (partial: Record<string, string | number>) => {
-			store.update((current) => ({ ...current, ...partial }));
-		},
-	};
-}
 
 export function buildTemplateUrl(templateId: string, params: ParamValues): string {
 	const searchParams = new URLSearchParams();

@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildTemplateUrl, createParamStore } from './stores';
-import { getTemplate } from './templates';
-import { get } from 'svelte/store';
+import { buildTemplateUrl } from './stores';
+import { configToParams, paramsToConfig, DEFAULT_CONFIG } from './layers';
 
 describe('buildTemplateUrl', () => {
 	it('builds correct URL with params as query string', () => {
@@ -56,39 +55,31 @@ describe('buildTemplateUrl', () => {
 	});
 });
 
-describe('createParamStore', () => {
-	it('initializes with schema defaults', () => {
-		const schema = getTemplate('gradient-bezel')!;
-		const store = createParamStore(schema);
-		const values = get(store);
-
-		expect(values.headline).toBe('Your App Name');
-		expect(values.layout).toBe('text-above');
-		expect(values.gradient_from).toBe('#D4A574');
-		expect(values.gradient_angle).toBe(135);
+describe('configToParams', () => {
+	it('flattens default config to params', () => {
+		const params = configToParams(DEFAULT_CONFIG);
+		expect(params.bg_type).toBe('linear-gradient');
+		expect(params.bg_color1).toBe('#D4A574');
+		expect(params.bg_angle).toBe(135);
+		expect(params.frame_style).toBe('bezel');
+		expect(params.device).toBe('iphone');
+		expect(params.layout).toBe('text-above');
+		expect(params.headline).toBe('Your App Name');
+		expect(params.font_color).toBe('#FFFFFF');
+		expect(params.shadow).toBe('medium');
+		expect(params.noise).toBe('0');
 	});
+});
 
-	it('reset() restores defaults', () => {
-		const schema = getTemplate('gradient-bezel')!;
-		const store = createParamStore(schema);
-
-		store.set({ headline: 'Changed', layout: 'split' });
-		expect(get(store).headline).toBe('Changed');
-
-		store.reset();
-		expect(get(store).headline).toBe('Your App Name');
-		expect(get(store).layout).toBe('text-above');
-	});
-
-	it('mergeParams() merges without losing existing keys', () => {
-		const schema = getTemplate('gradient-bezel')!;
-		const store = createParamStore(schema);
-
-		store.mergeParams({ headline: 'New Title' });
-		const values = get(store);
-
-		expect(values.headline).toBe('New Title');
-		expect(values.layout).toBe('text-above');
-		expect(values.gradient_from).toBe('#D4A574');
+describe('paramsToConfig', () => {
+	it('round-trips through configToParams', () => {
+		const params = configToParams(DEFAULT_CONFIG);
+		const config = paramsToConfig(params);
+		expect(config.background.type).toBe(DEFAULT_CONFIG.background.type);
+		expect(config.background.color1).toBe(DEFAULT_CONFIG.background.color1);
+		expect(config.device.style).toBe(DEFAULT_CONFIG.device.style);
+		expect(config.layout.type).toBe(DEFAULT_CONFIG.layout.type);
+		expect(config.typography.headline).toBe(DEFAULT_CONFIG.typography.headline);
+		expect(config.effects.shadow).toBe(DEFAULT_CONFIG.effects.shadow);
 	});
 });
