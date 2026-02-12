@@ -182,6 +182,7 @@
 
 		<LayerSidebar
 			bind:config
+			{screenshots}
 			onHeadlineAI={() => showHeadlineAI = !showHeadlineAI}
 		/>
 
