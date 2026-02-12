@@ -8,11 +8,13 @@
 		params,
 		selectedDevice,
 		seriesScreenshots = [],
+		panoramic = false,
 	}: {
 		templateId: string;
 		params: ParamValues;
 		selectedDevice: DeviceSize;
 		seriesScreenshots?: string[];
+		panoramic?: boolean;
 	} = $props();
 
 	let exporting = $state(false);
@@ -121,7 +123,7 @@
 				exportProgress = `${i + 1}/${seriesScreenshots.length}`;
 				const blob = await renderWithParams(selectedDevice, {
 					src: seriesScreenshots[i],
-					slide: i + 1,
+					slide: panoramic ? i : i + 1,
 					total_slides: seriesScreenshots.length,
 				});
 				const name = `${templateId}_slide_${i + 1}_${selectedDevice.width}x${selectedDevice.height}.png`;

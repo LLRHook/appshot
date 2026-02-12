@@ -34,6 +34,8 @@ export type LayoutType =
 
 export interface LayoutConfig {
 	type: LayoutType;
+	panoramic: boolean;
+	totalSlides: number;
 }
 
 // ── Typography ──
@@ -44,6 +46,26 @@ export interface TypographyConfig {
 	fontColor: string;
 	fontWeight: number; // 400, 500, 600, 700, 800
 }
+
+// ── Perspective (3D) ──
+
+export type PerspectivePreset = 'flat' | 'tilt-left' | 'tilt-right' | 'isometric' | 'hero-shot';
+
+export interface PerspectiveConfig {
+	preset: PerspectivePreset;
+	rotateX: number;
+	rotateY: number;
+	rotateZ: number;
+	perspective: number; // depth in px
+}
+
+export const PERSPECTIVE_PRESETS: Record<PerspectivePreset, Omit<PerspectiveConfig, 'preset'>> = {
+	'flat': { rotateX: 0, rotateY: 0, rotateZ: 0, perspective: 1000 },
+	'tilt-left': { rotateX: 5, rotateY: 25, rotateZ: -2, perspective: 1000 },
+	'tilt-right': { rotateX: 5, rotateY: -25, rotateZ: 2, perspective: 1000 },
+	'isometric': { rotateX: 35, rotateY: -30, rotateZ: 0, perspective: 1200 },
+	'hero-shot': { rotateX: 12, rotateY: -20, rotateZ: 5, perspective: 800 },
+};
 
 // ── Effects ──
 
@@ -64,6 +86,7 @@ export interface ComposableConfig {
 	layout: LayoutConfig;
 	typography: TypographyConfig;
 	effects: EffectsConfig;
+	perspective: PerspectiveConfig;
 }
 
 // ── Defaults ──
@@ -83,6 +106,8 @@ export const DEFAULT_CONFIG: ComposableConfig = {
 	},
 	layout: {
 		type: 'text-above',
+		panoramic: false,
+		totalSlides: 3,
 	},
 	typography: {
 		headline: 'Your App Name',
@@ -94,6 +119,13 @@ export const DEFAULT_CONFIG: ComposableConfig = {
 		shadow: 'medium',
 		glow: 'subtle',
 		noise: false,
+	},
+	perspective: {
+		preset: 'flat',
+		rotateX: 0,
+		rotateY: 0,
+		rotateZ: 0,
+		perspective: 1000,
 	},
 };
 
@@ -110,6 +142,8 @@ export function configToParams(config: ComposableConfig): Record<string, string 
 		device: config.device.device,
 		clay_color: config.device.clayColor,
 		layout: config.layout.type,
+		panoramic: config.layout.panoramic ? '1' : '0',
+		total_slides: config.layout.totalSlides,
 		headline: config.typography.headline,
 		subtitle: config.typography.subtitle,
 		font_color: config.typography.fontColor,
@@ -117,6 +151,11 @@ export function configToParams(config: ComposableConfig): Record<string, string 
 		shadow: config.effects.shadow,
 		glow: config.effects.glow,
 		noise: config.effects.noise ? '1' : '0',
+		persp_preset: config.perspective.preset,
+		persp_rx: config.perspective.rotateX,
+		persp_ry: config.perspective.rotateY,
+		persp_rz: config.perspective.rotateZ,
+		persp_depth: config.perspective.perspective,
 	};
 }
 
@@ -138,6 +177,8 @@ export function paramsToConfig(params: Record<string, string | number>): Composa
 		},
 		layout: {
 			type: (String(params.layout) as LayoutType) || DEFAULT_CONFIG.layout.type,
+			panoramic: params.panoramic === '1' || params.panoramic === 1,
+			totalSlides: Number(params.total_slides) || DEFAULT_CONFIG.layout.totalSlides,
 		},
 		typography: {
 			headline: String(params.headline ?? DEFAULT_CONFIG.typography.headline),
@@ -149,6 +190,13 @@ export function paramsToConfig(params: Record<string, string | number>): Composa
 			shadow: (String(params.shadow) as ShadowDepth) || DEFAULT_CONFIG.effects.shadow,
 			glow: (String(params.glow) as GlowIntensity) || DEFAULT_CONFIG.effects.glow,
 			noise: params.noise === '1' || params.noise === 1,
+		},
+		perspective: {
+			preset: (String(params.persp_preset || 'flat') as PerspectivePreset),
+			rotateX: Number(params.persp_rx) || 0,
+			rotateY: Number(params.persp_ry) || 0,
+			rotateZ: Number(params.persp_rz) || 0,
+			perspective: Number(params.persp_depth) || DEFAULT_CONFIG.perspective.perspective,
 		},
 	};
 }

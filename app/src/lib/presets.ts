@@ -7,6 +7,8 @@ export interface Preset {
 	config: ComposableConfig;
 }
 
+const FLAT_PERSPECTIVE = { preset: 'flat' as const, rotateX: 0, rotateY: 0, rotateZ: 0, perspective: 1000 };
+
 export const PRESETS: Preset[] = [
 	{
 		id: 'gradient-bezel',
@@ -15,9 +17,10 @@ export const PRESETS: Preset[] = [
 		config: {
 			background: { type: 'linear-gradient', color1: '#D4A574', color2: '#328983', color3: '#FD79A8', angle: 135 },
 			device: { style: 'bezel', device: 'iphone', clayColor: '#E8DED5' },
-			layout: { type: 'text-above' },
+			layout: { type: 'text-above', panoramic: false, totalSlides: 3 },
 			typography: { headline: 'Your App Name', subtitle: '', fontColor: '#D9B38C', fontWeight: 700 },
 			effects: { shadow: 'dramatic', glow: 'subtle', noise: false },
+			perspective: FLAT_PERSPECTIVE,
 		},
 	},
 	{
@@ -27,9 +30,10 @@ export const PRESETS: Preset[] = [
 		config: {
 			background: { type: 'solid', color1: '#F5F5F5', color2: '#F5F5F5', color3: '#F5F5F5', angle: 0 },
 			device: { style: 'none', device: 'iphone', clayColor: '#E8DED5' },
-			layout: { type: 'text-above' },
+			layout: { type: 'text-above', panoramic: false, totalSlides: 3 },
 			typography: { headline: 'Your App Name', subtitle: '', fontColor: '#328983', fontWeight: 700 },
 			effects: { shadow: 'subtle', glow: 'none', noise: false },
+			perspective: FLAT_PERSPECTIVE,
 		},
 	},
 	{
@@ -39,9 +43,10 @@ export const PRESETS: Preset[] = [
 		config: {
 			background: { type: 'solid', color1: '#111111', color2: '#111111', color3: '#111111', angle: 0 },
 			device: { style: 'wireframe', device: 'iphone', clayColor: '#E8DED5' },
-			layout: { type: 'text-above' },
+			layout: { type: 'text-above', panoramic: false, totalSlides: 3 },
 			typography: { headline: 'Your App Name', subtitle: '', fontColor: '#FFFFFF', fontWeight: 700 },
 			effects: { shadow: 'none', glow: 'none', noise: false },
+			perspective: FLAT_PERSPECTIVE,
 		},
 	},
 	{
@@ -51,9 +56,10 @@ export const PRESETS: Preset[] = [
 		config: {
 			background: { type: 'solid', color1: '#6C5CE7', color2: '#6C5CE7', color3: '#6C5CE7', angle: 0 },
 			device: { style: 'none', device: 'iphone', clayColor: '#E8DED5' },
-			layout: { type: 'text-above' },
+			layout: { type: 'text-above', panoramic: false, totalSlides: 3 },
 			typography: { headline: 'DO MORE', subtitle: 'The smarter way to get things done', fontColor: '#FFFFFF', fontWeight: 800 },
 			effects: { shadow: 'subtle', glow: 'none', noise: false },
+			perspective: FLAT_PERSPECTIVE,
 		},
 	},
 	{
@@ -63,21 +69,23 @@ export const PRESETS: Preset[] = [
 		config: {
 			background: { type: 'mesh', color1: '#6C5CE7', color2: '#00B894', color3: '#FD79A8', angle: 0 },
 			device: { style: 'none', device: 'iphone', clayColor: '#E8DED5' },
-			layout: { type: 'text-above' },
+			layout: { type: 'text-above', panoramic: false, totalSlides: 3 },
 			typography: { headline: 'Your App Name', subtitle: '', fontColor: '#FFFFFF', fontWeight: 600 },
 			effects: { shadow: 'medium', glow: 'subtle', noise: false },
+			perspective: FLAT_PERSPECTIVE,
 		},
 	},
 	{
 		id: 'panoramic',
 		name: 'Panoramic Flow',
-		description: 'Continuous gradient that flows across multiple screenshots. Great for a series.',
+		description: 'One wide screenshot flows across multiple slides. Each slide auto-shows a different portion.',
 		config: {
 			background: { type: 'linear-gradient', color1: '#667EEA', color2: '#F093FB', color3: '#FD79A8', angle: 135 },
 			device: { style: 'bezel', device: 'iphone', clayColor: '#E8DED5' },
-			layout: { type: 'text-above' },
+			layout: { type: 'text-above', panoramic: true, totalSlides: 3 },
 			typography: { headline: 'Your App Name', subtitle: '', fontColor: '#FFFFFF', fontWeight: 700 },
 			effects: { shadow: 'dramatic', glow: 'none', noise: false },
+			perspective: FLAT_PERSPECTIVE,
 		},
 	},
 	{
@@ -87,9 +95,10 @@ export const PRESETS: Preset[] = [
 		config: {
 			background: { type: 'linear-gradient', color1: '#D4A574', color2: '#328983', color3: '#FD79A8', angle: 135 },
 			device: { style: 'bezel', device: 'iphone', clayColor: '#E8DED5' },
-			layout: { type: 'duo-side-by-side' },
+			layout: { type: 'duo-side-by-side', panoramic: false, totalSlides: 3 },
 			typography: { headline: 'Your App Name', subtitle: '', fontColor: '#FFFFFF', fontWeight: 700 },
 			effects: { shadow: 'dramatic', glow: 'subtle', noise: false },
+			perspective: FLAT_PERSPECTIVE,
 		},
 	},
 	{
@@ -99,9 +108,10 @@ export const PRESETS: Preset[] = [
 		config: {
 			background: { type: 'linear-gradient', color1: '#667EEA', color2: '#F093FB', color3: '#FD79A8', angle: 135 },
 			device: { style: 'bezel', device: 'iphone', clayColor: '#E8DED5' },
-			layout: { type: 'duo-overlap' },
+			layout: { type: 'duo-overlap', panoramic: false, totalSlides: 3 },
 			typography: { headline: 'Your App Name', subtitle: '', fontColor: '#FFFFFF', fontWeight: 700 },
 			effects: { shadow: 'dramatic', glow: 'subtle', noise: false },
+			perspective: FLAT_PERSPECTIVE,
 		},
 	},
 	{
@@ -111,9 +121,36 @@ export const PRESETS: Preset[] = [
 		config: {
 			background: { type: 'solid', color1: '#FFFFFF', color2: '#FFFFFF', color3: '#FFFFFF', angle: 0 },
 			device: { style: 'none', device: 'iphone', clayColor: '#E8DED5' },
-			layout: { type: 'centered' },
+			layout: { type: 'centered', panoramic: false, totalSlides: 3 },
 			typography: { headline: 'Your App Name', subtitle: '', fontColor: '#1A1A1A', fontWeight: 700 },
 			effects: { shadow: 'subtle', glow: 'none', noise: false },
+			perspective: FLAT_PERSPECTIVE,
+		},
+	},
+	{
+		id: 'hero-3d',
+		name: 'Hero 3D',
+		description: 'Dark gradient with a dramatic 3D hero-shot angle. Premium bezel frame with visible phone edges.',
+		config: {
+			background: { type: 'linear-gradient', color1: '#0F0C29', color2: '#302B63', color3: '#24243E', angle: 135 },
+			device: { style: 'bezel', device: 'iphone', clayColor: '#E8DED5' },
+			layout: { type: 'text-above', panoramic: false, totalSlides: 3 },
+			typography: { headline: 'Your App Name', subtitle: '', fontColor: '#FFFFFF', fontWeight: 700 },
+			effects: { shadow: 'dramatic', glow: 'subtle', noise: false },
+			perspective: { preset: 'hero-shot', rotateX: 12, rotateY: -20, rotateZ: 5, perspective: 800 },
+		},
+	},
+	{
+		id: 'clay-tilt',
+		name: 'Clay Tilt',
+		description: 'Warm gradient with a tilted clay frame. Soft, tactile 3D mockup feel.',
+		config: {
+			background: { type: 'linear-gradient', color1: '#FFECD2', color2: '#FCB69F', color3: '#FD79A8', angle: 135 },
+			device: { style: 'clay', device: 'iphone', clayColor: '#F5E6D3' },
+			layout: { type: 'text-above', panoramic: false, totalSlides: 3 },
+			typography: { headline: 'Your App Name', subtitle: '', fontColor: '#5D4037', fontWeight: 700 },
+			effects: { shadow: 'medium', glow: 'none', noise: false },
+			perspective: { preset: 'tilt-right', rotateX: 5, rotateY: -25, rotateZ: 2, perspective: 1000 },
 		},
 	},
 ];

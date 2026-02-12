@@ -25,13 +25,21 @@
 
 	// Determine layout mode
 	const isDuo = $derived(config.layout.type === 'duo-side-by-side' || config.layout.type === 'duo-overlap');
+	const isPanoramic = $derived(config.layout.panoramic && !isDuo);
 	const isMultiImage = $derived(isDuo);
-	const galleryMaxSlots = $derived(isDuo ? 2 : 10);
+	const galleryMaxSlots = $derived(isDuo ? 2 : isPanoramic ? 1 : 10);
 	const gallerySlotLabels = $derived(
 		config.layout.type === 'duo-side-by-side' ? ['Left', 'Right']
 		: config.layout.type === 'duo-overlap' ? ['Back', 'Front']
 		: []
 	);
+
+	// Clamp currentSlide when totalSlides changes in panoramic mode
+	$effect(() => {
+		if (isPanoramic && currentSlide >= config.layout.totalSlides) {
+			currentSlide = config.layout.totalSlides - 1;
+		}
+	});
 
 	// Build params with images included
 	const paramsWithImages = $derived.by(() => {
@@ -40,6 +48,10 @@
 		if (isDuo) {
 			if (screenshots[0]) p.src_1 = screenshots[0];
 			if (screenshots[1]) p.src_2 = screenshots[1];
+		} else if (isPanoramic && screenshots.length > 0) {
+			p.src = screenshots[0];
+			p.slide = currentSlide;
+			p.total_slides = config.layout.totalSlides;
 		} else if (screenshots.length > 0) {
 			if (screenshots[currentSlide]) p.src = screenshots[currentSlide];
 		}
@@ -219,8 +231,12 @@
 			/>
 		</div>
 
-		<!-- Slide navigator for multi-screenshot (non-duo) -->
-		{#if !isDuo && screenshots.length > 1}
+		<!-- Slide navigator for multi-screenshot (non-duo) or panoramic -->
+		{#if isPanoramic && screenshots.length > 0}
+			<div class="border-t border-gray-100 bg-white px-4 py-2">
+				<SlideNavigator screenshots={Array.from({ length: config.layout.totalSlides }, () => screenshots[0])} bind:currentSlide />
+			</div>
+		{:else if !isDuo && screenshots.length > 1}
 			<div class="border-t border-gray-100 bg-white px-4 py-2">
 				<SlideNavigator {screenshots} bind:currentSlide />
 			</div>
@@ -236,7 +252,10 @@
 					templateId="composable"
 					params={paramsWithImages}
 					{selectedDevice}
-					seriesScreenshots={!isDuo ? screenshots : []}
+					seriesScreenshots={isPanoramic && screenshots.length > 0
+						? Array.from({ length: config.layout.totalSlides }, () => screenshots[0])
+						: !isDuo ? screenshots : []}
+					panoramic={isPanoramic}
 				/>
 			</div>
 		</div>

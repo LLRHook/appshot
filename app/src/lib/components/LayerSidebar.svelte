@@ -5,6 +5,7 @@
 	import LayoutPanel from './layers/LayoutPanel.svelte';
 	import TypographyPanel from './layers/TypographyPanel.svelte';
 	import EffectsPanel from './layers/EffectsPanel.svelte';
+	import PerspectivePanel from './layers/PerspectivePanel.svelte';
 	import PresetsPanel from './layers/PresetsPanel.svelte';
 
 	let {
@@ -17,7 +18,7 @@
 		onHeadlineAI?: () => void;
 	} = $props();
 
-	type Tab = 'presets' | 'background' | 'device' | 'layout' | 'type' | 'effects';
+	type Tab = 'presets' | 'background' | 'device' | 'layout' | 'type' | 'effects' | '3d';
 	let activeTab: Tab = $state('presets');
 
 	const tabs: { id: Tab; label: string }[] = [
@@ -27,6 +28,7 @@
 		{ id: 'layout', label: 'Layout' },
 		{ id: 'type', label: 'Type' },
 		{ id: 'effects', label: 'FX' },
+		{ id: '3d', label: '3D' },
 	];
 
 	function applyPreset(presetConfig: ComposableConfig) {
@@ -113,6 +115,8 @@
 			<TypographyPanel bind:config={config.typography} {onHeadlineAI} />
 		{:else if activeTab === 'effects'}
 			<EffectsPanel bind:config={config.effects} />
+		{:else if activeTab === '3d'}
+			<PerspectivePanel bind:config={config.perspective} />
 		{/if}
 	</div>
 </div>

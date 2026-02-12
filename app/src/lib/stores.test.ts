@@ -82,4 +82,45 @@ describe('paramsToConfig', () => {
 		expect(config.typography.headline).toBe(DEFAULT_CONFIG.typography.headline);
 		expect(config.effects.shadow).toBe(DEFAULT_CONFIG.effects.shadow);
 	});
+
+	it('round-trips perspective fields', () => {
+		const config = {
+			...DEFAULT_CONFIG,
+			perspective: { preset: 'hero-shot' as const, rotateX: 12, rotateY: -20, rotateZ: 5, perspective: 800 },
+		};
+		const params = configToParams(config);
+		const result = paramsToConfig(params);
+		expect(result.perspective.preset).toBe('hero-shot');
+		expect(result.perspective.rotateX).toBe(12);
+		expect(result.perspective.rotateY).toBe(-20);
+		expect(result.perspective.rotateZ).toBe(5);
+		expect(result.perspective.perspective).toBe(800);
+	});
+
+	it('round-trips panoramic fields', () => {
+		const config = {
+			...DEFAULT_CONFIG,
+			layout: { type: 'text-above' as const, panoramic: true, totalSlides: 5 },
+		};
+		const params = configToParams(config);
+		const result = paramsToConfig(params);
+		expect(result.layout.panoramic).toBe(true);
+		expect(result.layout.totalSlides).toBe(5);
+	});
+
+	it('defaults panoramic to false when not set', () => {
+		const params = configToParams(DEFAULT_CONFIG);
+		const result = paramsToConfig(params);
+		expect(result.layout.panoramic).toBe(false);
+		expect(result.layout.totalSlides).toBe(3);
+	});
+
+	it('defaults perspective to flat when not set', () => {
+		const result = paramsToConfig({});
+		expect(result.perspective.preset).toBe('flat');
+		expect(result.perspective.rotateX).toBe(0);
+		expect(result.perspective.rotateY).toBe(0);
+		expect(result.perspective.rotateZ).toBe(0);
+		expect(result.perspective.perspective).toBe(1000);
+	});
 });
