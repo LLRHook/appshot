@@ -5,6 +5,7 @@
 	import LivePreview from '$lib/components/LivePreview.svelte';
 	import DeviceTabs from '$lib/components/DeviceTabs.svelte';
 	import ExportButton from '$lib/components/ExportButton.svelte';
+	import ScreenshotGallery from '$lib/components/ScreenshotGallery.svelte';
 	import type { ParamValues } from '$lib/stores';
 
 	const templateId = $derived(page.url.searchParams.get('template') || '');
@@ -12,6 +13,57 @@
 
 	let params: ParamValues = $state({});
 	let selectedDevice: DeviceSize = $state(DEVICE_SIZES[0]);
+
+	// Screenshot gallery state
+	let screenshots: string[] = $state([]);
+
+	// Detect template mode from params
+	const imageParamKeys = $derived(
+		template ? Object.entries(template.params).filter(([, p]) => p.type === 'image').map(([k]) => k) : []
+	);
+	const isSeriesMode = $derived(template ? 'slide' in template.params : false);
+	const isMultiImage = $derived(imageParamKeys.length > 1 || isSeriesMode);
+	const galleryMaxSlots = $derived(isSeriesMode ? 10 : imageParamKeys.length);
+	const hiddenImageParams = $derived(isMultiImage ? new Set(imageParamKeys) : new Set<string>());
+
+	// For series mode: also hide slide and total_slides — managed automatically
+	const hiddenParams = $derived(() => {
+		const hidden = new Set(hiddenImageParams);
+		if (isSeriesMode) {
+			hidden.add('slide');
+			hidden.add('total_slides');
+		}
+		return hidden;
+	});
+
+	// Current slide for series mode
+	let currentSlide = $state(0);
+
+	// Map gallery screenshots to template params
+	$effect(() => {
+		if (!isMultiImage || screenshots.length === 0) return;
+
+		if (isSeriesMode) {
+			// Series: map current screenshot to src, auto-set slide counts
+			const updates: Record<string, string | number> = {
+				total_slides: screenshots.length,
+				slide: currentSlide + 1,
+			};
+			if (screenshots[currentSlide]) {
+				updates.src = screenshots[currentSlide];
+			}
+			params = { ...params, ...updates };
+		} else {
+			// Composed: map screenshots to src_1, src_2, etc.
+			const updates: Record<string, string> = {};
+			for (let i = 0; i < imageParamKeys.length; i++) {
+				if (screenshots[i]) {
+					updates[imageParamKeys[i]] = screenshots[i];
+				}
+			}
+			params = { ...params, ...updates };
+		}
+	});
 
 	// AI Headlines state
 	let showHeadlineAI = $state(false);
@@ -119,10 +171,16 @@
 				</div>
 			</div>
 			<div class="p-4">
+				{#if isMultiImage}
+					<div class="mb-4">
+						<ScreenshotGallery bind:screenshots maxSlots={galleryMaxSlots} />
+					</div>
+				{/if}
 				<ParamSidebar
 					schema={template}
 					bind:params
 					onHeadlineAI={() => showHeadlineAI = !showHeadlineAI}
+					hiddenParams={hiddenParams()}
 				/>
 			</div>
 			<!-- Close sidebar button on mobile -->

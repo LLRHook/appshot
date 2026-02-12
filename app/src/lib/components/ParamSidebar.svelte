@@ -6,10 +6,12 @@
 		schema,
 		params = $bindable(),
 		onHeadlineAI,
+		hiddenParams = new Set<string>(),
 	}: {
 		schema: TemplateSchema;
 		params: ParamValues;
 		onHeadlineAI?: () => void;
+		hiddenParams?: Set<string>;
 	} = $props();
 
 	function handleImageUpload(key: string, event: Event) {
@@ -36,7 +38,9 @@
 		reader.readAsDataURL(file);
 	}
 
-	const paramEntries = $derived(Object.entries(schema.params) as [string, ParamDef][]);
+	const paramEntries = $derived(
+		(Object.entries(schema.params) as [string, ParamDef][]).filter(([key]) => !hiddenParams.has(key))
+	);
 </script>
 
 <div class="space-y-4">
