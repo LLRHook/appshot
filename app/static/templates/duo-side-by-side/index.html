@@ -41,18 +41,39 @@
     display: flex;
     align-items: flex-end;
     justify-content: center;
-    gap: 2.5%;
+    gap: 3%;
     width: 100%;
-    padding: 0 4% 0;
+    padding: 0 5% 2.5%;
+  }
+
+  .device-wrapper {
+    position: relative;
+    height: 90%;
+    aspect-ratio: var(--screen-ratio);
+  }
+
+  .device-glow {
+    position: absolute;
+    width: 140%;
+    height: 120%;
+    top: -10%;
+    left: -20%;
+    background: radial-gradient(ellipse at center, rgba(255,255,255,0.10) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
   }
 
   .device-frame {
     position: relative;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
     background: #1a1a1a;
     overflow: hidden;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.25), 0 8px 24px rgba(0,0,0,0.15);
-    height: 95%;
-    aspect-ratio: var(--screen-ratio);
+    box-shadow:
+      0 2px 8px rgba(0,0,0,0.15),
+      0 12px 36px rgba(0,0,0,0.2),
+      0 24px 72px rgba(0,0,0,0.25);
   }
 
   .device-iphone .device-frame {
@@ -110,17 +131,23 @@
     <h1 class="headline" id="headline"></h1>
   </div>
   <div class="devices-area">
-    <div class="device-frame">
-      <div class="device-screen">
-        <img id="screenshot-1" src="" alt="Screenshot 1" />
+    <div class="device-wrapper">
+      <div class="device-glow"></div>
+      <div class="device-frame">
+        <div class="device-screen">
+          <img id="screenshot-1" src="" alt="Screenshot 1" />
+        </div>
+        <div class="dynamic-island"></div>
       </div>
-      <div class="dynamic-island"></div>
     </div>
-    <div class="device-frame">
-      <div class="device-screen">
-        <img id="screenshot-2" src="" alt="Screenshot 2" />
+    <div class="device-wrapper">
+      <div class="device-glow"></div>
+      <div class="device-frame">
+        <div class="device-screen">
+          <img id="screenshot-2" src="" alt="Screenshot 2" />
+        </div>
+        <div class="dynamic-island"></div>
       </div>
-      <div class="dynamic-island"></div>
     </div>
   </div>
   <script>
