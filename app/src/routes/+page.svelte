@@ -14,19 +14,60 @@
 
 	<!-- Hero -->
 	<section class="border-b border-gray-100 bg-white">
-		<div class="mx-auto max-w-5xl px-6 py-16 text-center">
-			<h2 class="text-4xl font-bold tracking-tight text-gray-900">
-				App Store screenshots,<br />done in minutes
-			</h2>
-			<p class="mx-auto mt-4 max-w-lg text-lg text-gray-500">
-				Upload your app screenshots, pick a template, customize colors and text, export at exact App Store dimensions.
-			</p>
-			<a
-				href="/editor?template=gradient-bezel"
-				class="mt-8 inline-block rounded-xl bg-teal-600 px-8 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-700"
-			>
-				Start Creating
-			</a>
+		<div class="mx-auto max-w-5xl px-6 py-16">
+			<div class="flex flex-col items-center gap-12 lg:flex-row lg:gap-16">
+				<div class="text-center lg:text-left lg:flex-1">
+					<h2 class="text-4xl font-bold tracking-tight text-gray-900">
+						App Store screenshots,<br />done in minutes
+					</h2>
+					<p class="mx-auto mt-4 max-w-lg text-lg text-gray-500 lg:mx-0">
+						Upload your app screenshots, pick a template, customize colors and text, export at exact App Store dimensions.
+					</p>
+					<a
+						href="/editor?template=gradient-bezel"
+						class="mt-8 inline-block rounded-xl bg-teal-600 px-8 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-700"
+					>
+						Start Creating
+					</a>
+				</div>
+
+				<!-- Before / After illustration -->
+				<div class="flex items-center gap-4 lg:flex-1">
+					<!-- Before: raw screenshot -->
+					<div class="flex flex-col items-center gap-2">
+						<div class="h-52 w-24 rounded-lg border-2 border-dashed border-gray-300 bg-gray-100 flex items-center justify-center">
+							<div class="space-y-1.5 px-2">
+								<div class="h-1.5 w-full rounded bg-gray-300"></div>
+								<div class="h-8 w-full rounded bg-gray-200"></div>
+								<div class="h-1.5 w-3/4 rounded bg-gray-300"></div>
+								<div class="h-6 w-full rounded bg-gray-200"></div>
+							</div>
+						</div>
+						<span class="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Raw</span>
+					</div>
+
+					<!-- Arrow -->
+					<div class="text-2xl text-gray-300">&rarr;</div>
+
+					<!-- After: composed frame -->
+					<div class="flex flex-col items-center gap-2">
+						<div class="h-52 w-24 rounded-xl shadow-lg overflow-hidden" style="background: linear-gradient(135deg, #D4A574, #328983)">
+							<div class="flex h-full flex-col items-center justify-center gap-2 p-2">
+								<div class="h-1.5 w-12 rounded bg-white/70"></div>
+								<div class="h-28 w-16 rounded-lg bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center">
+									<div class="space-y-1 px-1.5">
+										<div class="h-1 w-full rounded bg-white/40"></div>
+										<div class="h-5 w-full rounded bg-white/30"></div>
+										<div class="h-1 w-3/4 rounded bg-white/40"></div>
+										<div class="h-4 w-full rounded bg-white/30"></div>
+									</div>
+								</div>
+							</div>
+						</div>
+						<span class="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Composed</span>
+					</div>
+				</div>
+			</div>
 		</div>
 	</section>
 
