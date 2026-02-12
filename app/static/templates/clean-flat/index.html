@@ -69,6 +69,12 @@
     document.getElementById('headline').style.color = textColor;
     document.getElementById('headline').textContent = params.get('headline') || '';
     document.getElementById('screenshot').src = params.get('src') || '/demo-screenshot.png';
+
+    window.addEventListener('message', (e) => {
+      if (e.data?.type === 'setImages' && e.data.images?.src) {
+        document.getElementById('screenshot').src = e.data.images.src;
+      }
+    });
   </script>
 </body>
 </html>

@@ -400,6 +400,17 @@
       cropImg.src = src;
       cropImg.style.objectPosition = `${cropX}% ${cropY}%`;
     }
+
+    // Receive images via postMessage (data URLs too large for query params)
+    window.addEventListener('message', (e) => {
+      if (e.data?.type === 'setImages' && e.data.images) {
+        if (e.data.images.src) {
+          document.getElementById('screenshot').src = e.data.images.src;
+          const cropImg = document.getElementById('crop-screenshot');
+          if (cropImg) cropImg.src = e.data.images.src;
+        }
+      }
+    });
   </script>
 </body>
 </html>

@@ -178,6 +178,12 @@
 
     // Accent color on device outline border
     document.querySelector('.device-outline').style.borderColor = accentColor + '40';
+
+    window.addEventListener('message', (e) => {
+      if (e.data?.type === 'setImages' && e.data.images?.src) {
+        document.getElementById('screenshot').src = e.data.images.src;
+      }
+    });
   </script>
 </body>
 </html>

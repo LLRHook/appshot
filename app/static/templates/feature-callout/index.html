@@ -118,6 +118,12 @@
     badge.style.background = accentColor;
     badge.style.color = '#fff';
     badge.classList.add(`badge-${badgePosition}`);
+
+    window.addEventListener('message', (e) => {
+      if (e.data?.type === 'setImages' && e.data.images?.src) {
+        document.getElementById('screenshot').src = e.data.images.src;
+      }
+    });
   </script>
 </body>
 </html>
