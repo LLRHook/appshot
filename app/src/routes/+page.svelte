@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { TEMPLATES } from '$lib/templates';
+	import { PRESETS } from '$lib/presets';
 	import TemplateCard from '$lib/components/TemplateCard.svelte';
 </script>
 
@@ -21,19 +21,26 @@
 						App Store screenshots,<br />done in minutes
 					</h2>
 					<p class="mx-auto mt-4 max-w-lg text-lg text-gray-500 lg:mx-0">
-						Upload your app screenshots, pick a template, customize colors and text, export at exact App Store dimensions.
+						Pick a preset or compose from scratch. Mix backgrounds, device frames, layouts, and effects to create professional screenshots.
 					</p>
-					<a
-						href="/editor?template=gradient-bezel"
-						class="mt-8 inline-block rounded-xl bg-teal-600 px-8 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-700"
-					>
-						Start Creating
-					</a>
+					<div class="mt-8 flex flex-wrap items-center gap-3 justify-center lg:justify-start">
+						<a
+							href="/editor?preset=gradient-bezel"
+							class="inline-block rounded-xl bg-teal-600 px-8 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-700"
+						>
+							Start from Preset
+						</a>
+						<a
+							href="/editor"
+							class="inline-block rounded-xl border border-gray-300 px-8 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+						>
+							Start from Scratch
+						</a>
+					</div>
 				</div>
 
 				<!-- Before / After illustration -->
 				<div class="flex items-center gap-4 lg:flex-1">
-					<!-- Before: raw screenshot -->
 					<div class="flex flex-col items-center gap-2">
 						<div class="h-52 w-24 rounded-lg border-2 border-dashed border-gray-300 bg-gray-100 flex items-center justify-center">
 							<div class="space-y-1.5 px-2">
@@ -45,11 +52,7 @@
 						</div>
 						<span class="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Raw</span>
 					</div>
-
-					<!-- Arrow -->
 					<div class="text-2xl text-gray-300">&rarr;</div>
-
-					<!-- After: composed frame -->
 					<div class="flex flex-col items-center gap-2">
 						<div class="h-52 w-24 rounded-xl shadow-lg overflow-hidden" style="background: linear-gradient(135deg, #D4A574, #328983)">
 							<div class="flex h-full flex-col items-center justify-center gap-2 p-2">
@@ -76,13 +79,13 @@
 		<div class="mx-auto grid max-w-5xl grid-cols-1 gap-8 px-6 py-16 sm:grid-cols-2 lg:grid-cols-4">
 			<div>
 				<div class="mb-3 text-2xl">&#x1F3A8;</div>
-				<h3 class="text-sm font-semibold text-gray-900">Templates</h3>
-				<p class="mt-1 text-xs text-gray-500">Pre-built layouts with gradients, device bezels, and varied compositions.</p>
+				<h3 class="text-sm font-semibold text-gray-900">Composable Layers</h3>
+				<p class="mt-1 text-xs text-gray-500">Mix backgrounds, device frames, layouts, and effects independently.</p>
 			</div>
 			<div>
 				<div class="mb-3 text-2xl">&#x26A1;</div>
 				<h3 class="text-sm font-semibold text-gray-900">Live Preview</h3>
-				<p class="mt-1 text-xs text-gray-500">Real-time preview as you tweak every parameter. What you see is what you export.</p>
+				<p class="mt-1 text-xs text-gray-500">Real-time preview as you tweak every layer. What you see is what you export.</p>
 			</div>
 			<div>
 				<div class="mb-3 text-2xl">&#x2728;</div>
@@ -97,15 +100,24 @@
 		</div>
 	</section>
 
-	<!-- Templates -->
+	<!-- Presets Gallery -->
 	<section>
 		<div class="mx-auto max-w-5xl px-6 py-16">
-			<h2 class="mb-2 text-2xl font-bold text-gray-900">Templates</h2>
-			<p class="mb-8 text-sm text-gray-500">Pick a template to start composing your App Store screenshots.</p>
+			<h2 class="mb-2 text-2xl font-bold text-gray-900">Presets</h2>
+			<p class="mb-8 text-sm text-gray-500">Start from a preset and customize every layer, or create your own from scratch.</p>
 			<div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-				{#each TEMPLATES as template (template.id)}
-					<TemplateCard {template} />
+				{#each PRESETS as preset (preset.id)}
+					<TemplateCard {preset} />
 				{/each}
+				<!-- Start from scratch card -->
+				<a
+					href="/editor"
+					class="group flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 p-8 transition hover:border-teal-400 hover:bg-teal-50/30"
+				>
+					<div class="mb-3 text-3xl text-gray-300 group-hover:text-teal-400">+</div>
+					<span class="text-sm font-semibold text-gray-500 group-hover:text-teal-700">Start from Scratch</span>
+					<span class="mt-1 text-xs text-gray-400">Build your own layer combination</span>
+				</a>
 			</div>
 		</div>
 	</section>

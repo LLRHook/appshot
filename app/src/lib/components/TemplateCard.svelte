@@ -1,41 +1,42 @@
 <script lang="ts">
-	import type { TemplateSchema } from '$lib/templates';
+	import type { Preset } from '$lib/presets';
 
-	let { template }: { template: TemplateSchema } = $props();
+	let { preset }: { preset: Preset } = $props();
 
-	const THUMB_STYLES: Record<string, string> = {
-		'gradient-bezel': 'background: linear-gradient(135deg, #D4A574, #328983)',
-		'clean-flat': 'background: #F5F5F5',
-		'dark-minimal': 'background: #111',
-		'bold-type': 'background: #6C5CE7',
-		'glass-card': 'background: linear-gradient(135deg, #6C5CE7, #00B894)',
-		'panoramic': 'background: linear-gradient(135deg, #667EEA, #F093FB)',
-		'duo-side-by-side': 'background: linear-gradient(135deg, #D4A574, #328983)',
-		'duo-overlap': 'background: linear-gradient(135deg, #667EEA, #F093FB)',
-		'feature-callout': 'background: #f8f8f8',
-	};
+	function presetBackground(p: Preset): string {
+		const bg = p.config.background;
+		if (bg.type === 'linear-gradient') {
+			return `linear-gradient(${bg.angle}deg, ${bg.color1}, ${bg.color2})`;
+		} else if (bg.type === 'radial-gradient') {
+			return `radial-gradient(circle, ${bg.color1}, ${bg.color2})`;
+		} else if (bg.type === 'mesh') {
+			return `linear-gradient(135deg, ${bg.color1} 0%, ${bg.color2} 50%, ${bg.color3} 100%)`;
+		} else {
+			return bg.color1;
+		}
+	}
 
-	const thumbStyle = $derived(THUMB_STYLES[template.id] || 'background: #e5e7eb');
-	const thumbSrc = $derived(`/templates/${template.id}/thumb.png`);
+	const bgStyle = $derived(`background: ${presetBackground(preset)}`);
+	const thumbSrc = $derived(`/templates/${preset.id}/thumb.png`);
 
 	let imgFailed = $state(false);
 </script>
 
 <a
-	href="/editor?template={template.id}"
+	href="/editor?preset={preset.id}"
 	class="group block rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md hover:border-gray-300"
 >
 	{#if !imgFailed}
 		<img
 			src={thumbSrc}
-			alt="{template.name} preview"
+			alt="{preset.name} preview"
 			class="mb-3 h-48 w-full rounded-xl border border-gray-200 bg-gray-50 object-cover"
 			onerror={() => imgFailed = true}
 		/>
 	{:else}
 		<div
 			class="mb-3 flex h-48 items-center justify-center rounded-xl"
-			style={thumbStyle}
+			style={bgStyle}
 		>
 			<div class="rounded-lg bg-white/20 px-4 py-6 backdrop-blur-sm">
 				<div class="h-2 w-16 rounded bg-white/60 mb-2"></div>
@@ -44,7 +45,7 @@
 		</div>
 	{/if}
 	<h3 class="text-sm font-semibold text-gray-900 group-hover:text-teal-700">
-		{template.name}
+		{preset.name}
 	</h3>
-	<p class="mt-1 text-xs text-gray-500">{template.description}</p>
+	<p class="mt-1 text-xs text-gray-500">{preset.description}</p>
 </a>
