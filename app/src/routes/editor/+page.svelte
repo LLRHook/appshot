@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { page } from '$app/state';
 	import { getTemplate, getTemplateDefaults, DEVICE_SIZES, type DeviceSize } from '$lib/templates';
 	import ParamSidebar from '$lib/components/ParamSidebar.svelte';
@@ -44,6 +45,7 @@
 	let currentSlide = $state(0);
 
 	// Map gallery screenshots to template params
+	// Use untrack on params reads to avoid infinite loop (this effect writes params)
 	$effect(() => {
 		if (!isMultiImage || screenshots.length === 0) return;
 
@@ -56,7 +58,7 @@
 			if (screenshots[currentSlide]) {
 				updates.src = screenshots[currentSlide];
 			}
-			params = { ...params, ...updates };
+			params = { ...untrack(() => params), ...updates };
 		} else {
 			// Composed: map screenshots to src_1, src_2, etc.
 			const updates: Record<string, string> = {};
@@ -65,7 +67,7 @@
 					updates[imageParamKeys[i]] = screenshots[i];
 				}
 			}
-			params = { ...params, ...updates };
+			params = { ...untrack(() => params), ...updates };
 		}
 	});
 
