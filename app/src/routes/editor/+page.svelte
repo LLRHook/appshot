@@ -6,6 +6,7 @@
 	import DeviceTabs from '$lib/components/DeviceTabs.svelte';
 	import ExportButton from '$lib/components/ExportButton.svelte';
 	import ScreenshotGallery from '$lib/components/ScreenshotGallery.svelte';
+	import SlideNavigator from '$lib/components/SlideNavigator.svelte';
 	import type { ParamValues } from '$lib/stores';
 
 	const templateId = $derived(page.url.searchParams.get('template') || '');
@@ -216,13 +217,25 @@
 				/>
 			</div>
 
+			<!-- Slide navigator for series mode -->
+			{#if isSeriesMode && screenshots.length > 1}
+				<div class="border-t border-gray-100 bg-white px-4 py-2">
+					<SlideNavigator {screenshots} bind:currentSlide />
+				</div>
+			{/if}
+
 			<!-- Sticky footer: device tabs + export -->
 			<div class="sticky bottom-0 z-10 border-t border-gray-200 bg-white px-4 py-3">
 				<div class="flex items-center justify-between gap-2">
 					<div class="overflow-x-auto">
 						<DeviceTabs selected={selectedDevice} onSelect={onDeviceChange} />
 					</div>
-					<ExportButton {templateId} {params} {selectedDevice} />
+					<ExportButton
+						{templateId}
+						{params}
+						{selectedDevice}
+						seriesScreenshots={isSeriesMode ? screenshots : []}
+					/>
 				</div>
 			</div>
 		</div>
