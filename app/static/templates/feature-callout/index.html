@@ -41,28 +41,29 @@
     align-items: flex-start;
     justify-content: center;
     width: 100%;
-    padding: 1% 8% 0;
+    padding: 1% 12% 0;
     position: relative;
+    overflow: visible;
   }
 
   .screenshot-wrapper {
     position: relative;
     height: 100%;
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
+    aspect-ratio: 9 / 19.5;
+    flex-shrink: 0;
   }
 
   .screenshot-wrapper img {
+    width: 100%;
     height: 100%;
-    object-fit: contain;
+    object-fit: cover;
     border-radius: 2.5vh;
     box-shadow: 0 12px 40px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
   }
 
   .callout-badge {
     position: absolute;
-    right: -2vh;
+    right: -1vh;
     padding: 1.2vh 2.5vh;
     border-radius: 5vh;
     font-weight: 600;
@@ -70,6 +71,7 @@
     letter-spacing: -0.01em;
     white-space: nowrap;
     box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+    z-index: 1;
   }
 
   .callout-badge::before {
@@ -109,7 +111,7 @@
     document.body.style.background = bgColor;
     document.getElementById('headline').style.color = textColor;
     document.getElementById('headline').textContent = params.get('headline') || '';
-    document.getElementById('screenshot').src = params.get('src') || '';
+    document.getElementById('screenshot').src = params.get('src') || '/demo-screenshot.png';
 
     const badge = document.getElementById('badge');
     badge.textContent = badgeText;

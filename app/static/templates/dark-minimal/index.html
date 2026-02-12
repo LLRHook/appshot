@@ -174,7 +174,7 @@
     document.documentElement.style.setProperty('--screen-ratio', ratio);
 
     document.getElementById('headline').textContent = params.get('headline') || '';
-    document.getElementById('screenshot').src = params.get('src') || '';
+    document.getElementById('screenshot').src = params.get('src') || '/demo-screenshot.png';
 
     // Accent color on device outline border
     document.querySelector('.device-outline').style.borderColor = accentColor + '40';
