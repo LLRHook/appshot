@@ -40,8 +40,8 @@ const TEMPLATES = [
 		id: 'clean-flat',
 		params: {
 			headline: 'Your App Name',
-			bg_color: '#F5F5F5',
-			text_color: '#328983',
+			bg_color: 'C8DCD9',
+			text_color: '328983',
 		},
 	},
 	{

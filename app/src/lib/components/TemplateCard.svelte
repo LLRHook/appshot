@@ -23,7 +23,7 @@
 		<img
 			src={thumbSrc}
 			alt="{template.name} preview"
-			class="mb-3 h-48 w-full rounded-xl object-cover"
+			class="mb-3 h-48 w-full rounded-xl border border-gray-200 bg-gray-50 object-cover"
 			onerror={() => imgFailed = true}
 		/>
 	{:else}
