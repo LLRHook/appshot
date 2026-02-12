@@ -18,16 +18,19 @@ export const POST: RequestHandler = async ({ request, url }) => {
 		return json({ error: 'Missing templateId, width, or height' }, { status: 400 });
 	}
 
-	// If src is a data URL, write it to a temp file and use file:// URL
-	let tempFile: string | null = null;
+	// Write any data URL params to temp files and replace with file:// URLs
+	const tempFiles: string[] = [];
 	const renderParams = { ...params };
 
-	if (typeof renderParams.src === 'string' && renderParams.src.startsWith('data:')) {
-		const tempDir = mkdtempSync(join(tmpdir(), 'appshot-'));
-		tempFile = join(tempDir, 'screenshot.png');
-		const base64Data = renderParams.src.split(',')[1];
-		writeFileSync(tempFile, Buffer.from(base64Data, 'base64'));
-		renderParams.src = `file://${tempFile}`;
+	const tempDir = mkdtempSync(join(tmpdir(), 'appshot-'));
+	for (const [key, value] of Object.entries(renderParams)) {
+		if (typeof value === 'string' && value.startsWith('data:')) {
+			const tempFile = join(tempDir, `${key}.png`);
+			const base64Data = value.split(',')[1];
+			writeFileSync(tempFile, Buffer.from(base64Data, 'base64'));
+			renderParams[key] = `file://${tempFile}`;
+			tempFiles.push(tempFile);
+		}
 	}
 
 	// Build template URL — use the dev server's own origin for template files
@@ -61,18 +64,17 @@ export const POST: RequestHandler = async ({ request, url }) => {
 		await Page.navigate({ url: templateUrl });
 		await Page.loadEventFired();
 
-		// Wait for screenshot image to load
+		// Wait for all images in the template to load
 		await Runtime.evaluate({
 			expression: `new Promise((resolve) => {
 				const check = () => {
-					const img = document.getElementById('screenshot');
-					if (!img || !img.src || img.src === window.location.href) { resolve(true); return; }
-					if (img.complete && img.naturalWidth > 0) {
-						const cropImg = document.getElementById('crop-screenshot');
-						if (cropImg && cropImg.src && cropImg.src !== window.location.href) {
-							if (cropImg.complete && cropImg.naturalWidth > 0) { resolve(true); return; }
-						} else { resolve(true); return; }
-					}
+					const images = document.querySelectorAll('img[id]');
+					if (images.length === 0) { resolve(true); return; }
+					const allLoaded = Array.from(images).every(img => {
+						if (!img.src || img.src === window.location.href) return true;
+						return img.complete && img.naturalWidth > 0;
+					});
+					if (allLoaded) { resolve(true); return; }
 					setTimeout(check, 100);
 				};
 				check();
@@ -101,8 +103,8 @@ export const POST: RequestHandler = async ({ request, url }) => {
 		);
 	} finally {
 		if (client) await client.close();
-		if (tempFile) {
-			try { unlinkSync(tempFile); } catch {}
+		for (const f of tempFiles) {
+			try { unlinkSync(f); } catch {}
 		}
 	}
 };

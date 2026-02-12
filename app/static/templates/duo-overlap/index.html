@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duo Overlap</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .headline-area {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 13%;
+    width: 100%;
+  }
+
+  .headline {
+    font-weight: 700;
+    font-size: 4.2vh;
+    text-align: center;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: rgba(255,255,255,0.95);
+    padding: 0 8%;
+  }
+
+  .devices-area {
+    flex: 1;
+    position: relative;
+    width: 100%;
+    padding: 0 4% 3%;
+  }
+
+  .device-frame {
+    position: absolute;
+    background: #1a1a1a;
+    overflow: hidden;
+    aspect-ratio: var(--screen-ratio);
+  }
+
+  .device-iphone .device-frame {
+    border-radius: 4vh;
+    padding: 1.2vh;
+  }
+
+  .device-ipad .device-frame {
+    border-radius: 2.5vh;
+    padding: 0.8vh;
+  }
+
+  /* Back device: slightly smaller, offset left and up */
+  .device-back {
+    height: 78%;
+    left: 10%;
+    top: 2%;
+    z-index: 1;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.2), 0 6px 16px rgba(0,0,0,0.1);
+  }
+
+  /* Front device: larger, offset right and down, overlaps back */
+  .device-front {
+    height: 88%;
+    right: 10%;
+    bottom: 0;
+    z-index: 2;
+    box-shadow: 0 24px 72px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.2);
+  }
+
+  .device-screen {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .device-iphone .device-screen {
+    border-radius: 3.2vh;
+  }
+
+  .device-ipad .device-screen {
+    border-radius: 1.8vh;
+  }
+
+  .device-screen img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .dynamic-island {
+    display: none;
+    position: absolute;
+    top: 1.4vh;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 12vh;
+    height: 3.2vh;
+    background: #000;
+    border-radius: 1.6vh;
+    z-index: 5;
+  }
+
+  .device-iphone .dynamic-island {
+    display: block;
+  }
+</style>
+</head>
+<body>
+  <div class="headline-area">
+    <h1 class="headline" id="headline"></h1>
+  </div>
+  <div class="devices-area">
+    <div class="device-frame device-back">
+      <div class="device-screen">
+        <img id="screenshot-1" src="" alt="Screenshot 1" />
+      </div>
+      <div class="dynamic-island"></div>
+    </div>
+    <div class="device-frame device-front">
+      <div class="device-screen">
+        <img id="screenshot-2" src="" alt="Screenshot 2" />
+      </div>
+      <div class="dynamic-island"></div>
+    </div>
+  </div>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const gradientFrom = '#' + (params.get('gradient_from') || '667eea');
+    const gradientTo = '#' + (params.get('gradient_to') || 'f093fb');
+    const angle = parseInt(params.get('gradient_angle') || '135');
+    const device = params.get('device') || 'iphone';
+
+    document.body.style.background = `linear-gradient(${angle}deg, ${gradientFrom}, ${gradientTo})`;
+    document.body.classList.add(`device-${device}`);
+
+    const ratio = device === 'ipad' ? '3 / 4' : '9 / 19.5';
+    document.documentElement.style.setProperty('--screen-ratio', ratio);
+
+    document.getElementById('headline').textContent = params.get('headline') || '';
+    document.getElementById('screenshot-1').src = params.get('src_1') || '/demo-screenshot.png';
+    document.getElementById('screenshot-2').src = params.get('src_2') || '/demo-screenshot.png';
+
+    window.addEventListener('message', (e) => {
+      if (e.data?.type === 'setImages' && e.data.images) {
+        if (e.data.images.src_1) {
+          document.getElementById('screenshot-1').src = e.data.images.src_1;
+        }
+        if (e.data.images.src_2) {
+          document.getElementById('screenshot-2').src = e.data.images.src_2;
+        }
+      }
+    });
+  </script>
+</body>
+</html>
