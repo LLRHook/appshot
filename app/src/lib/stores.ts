@@ -21,9 +21,9 @@ export function buildTemplateUrl(templateId: string, params: ParamValues): strin
 	const searchParams = new URLSearchParams();
 	for (const [key, value] of Object.entries(params)) {
 		if (value !== undefined && value !== '') {
-			// Strip # from color values for the template
+			// Strip # from hex color values — templates prepend # internally
 			const strVal = String(value);
-			if (key.startsWith('gradient_') && key !== 'gradient_angle' && strVal.startsWith('#')) {
+			if (strVal.match(/^#[0-9a-fA-F]{3,8}$/)) {
 				searchParams.set(key, strVal.slice(1));
 			} else {
 				searchParams.set(key, strVal);

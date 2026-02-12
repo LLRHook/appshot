@@ -35,7 +35,7 @@ export const POST: RequestHandler = async ({ request, url }) => {
 	for (const [key, value] of Object.entries(renderParams)) {
 		if (value !== undefined && value !== '') {
 			const strVal = String(value);
-			if (key.startsWith('gradient_') && key !== 'gradient_angle' && strVal.startsWith('#')) {
+			if (strVal.match(/^#[0-9a-fA-F]{3,8}$/)) {
 				searchParams.set(key, strVal.slice(1));
 			} else {
 				searchParams.set(key, strVal);

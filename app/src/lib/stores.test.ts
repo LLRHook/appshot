@@ -15,23 +15,29 @@ describe('buildTemplateUrl', () => {
 		);
 	});
 
-	it('strips # from gradient_from and gradient_to color values', () => {
+	it('strips # from hex color values', () => {
 		const url = buildTemplateUrl('gradient-bezel', {
 			gradient_from: '#D4A574',
 			gradient_to: '#328983',
+			bg_color: '#6C5CE7',
+			text_color: '#FFFFFF',
 		});
 
 		expect(url).toContain('gradient_from=D4A574');
 		expect(url).toContain('gradient_to=328983');
+		expect(url).toContain('bg_color=6C5CE7');
+		expect(url).toContain('text_color=FFFFFF');
 		expect(url).not.toContain('%23');
 	});
 
-	it('does NOT strip # from gradient_angle', () => {
+	it('does not strip # from non-hex values', () => {
 		const url = buildTemplateUrl('gradient-bezel', {
 			gradient_angle: 135,
+			headline: '#hashtag',
 		});
 
 		expect(url).toContain('gradient_angle=135');
+		expect(url).toContain('headline=%23hashtag');
 	});
 
 	it('omits empty and undefined values', () => {
