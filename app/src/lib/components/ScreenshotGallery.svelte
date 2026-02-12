@@ -2,9 +2,11 @@
 	let {
 		screenshots = $bindable<string[]>([]),
 		maxSlots = 10,
+		slotLabels = [] as string[],
 	}: {
 		screenshots: string[];
 		maxSlots?: number;
+		slotLabels?: string[];
 	} = $props();
 
 	let dragOverIndex: number | null = $state(null);
@@ -67,8 +69,48 @@
 		Screenshots ({screenshots.length}{maxSlots < 10 ? `/${maxSlots}` : ''})
 	</p>
 
-	<!-- Thumbnail strip -->
-	{#if screenshots.length > 0}
+	<!-- Slot-based layout for composed templates -->
+	{#if slotLabels.length > 0}
+		<div class="flex flex-wrap gap-2">
+			{#each slotLabels as label, i (i)}
+				{#if screenshots[i]}
+					<div
+						class="group relative h-20 w-14 shrink-0 cursor-grab overflow-hidden rounded-lg border-2 transition {dragOverIndex === i ? 'border-teal-400 bg-teal-50' : 'border-gray-200'}"
+						draggable="true"
+						role="listitem"
+						ondragstart={() => handleDragStart(i)}
+						ondragover={(e) => handleDragOver(e, i)}
+						ondrop={(e) => handleDrop(e, i)}
+						ondragend={handleDragEnd}
+					>
+						<img src={screenshots[i]} alt={label} class="h-full w-full object-cover" />
+						<span class="absolute bottom-0 left-0 right-0 bg-black/50 text-center text-[10px] text-white">
+							{label}
+						</span>
+						<button
+							onclick={() => removeScreenshot(i)}
+							class="absolute -right-0.5 -top-0.5 hidden h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] leading-none text-white group-hover:flex"
+						>
+							&times;
+						</button>
+					</div>
+				{:else}
+					<div
+						class="flex h-20 w-14 shrink-0 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 transition hover:border-teal-400"
+						role="button"
+						tabindex="0"
+						ondragover={(e) => e.preventDefault()}
+						ondrop={(e) => { e.preventDefault(); handleFiles(e.dataTransfer?.files ?? null); }}
+						onclick={() => document.getElementById('gallery-input')?.click()}
+						onkeydown={(e) => { if (e.key === 'Enter') document.getElementById('gallery-input')?.click(); }}
+					>
+						<span class="px-0.5 text-center text-[9px] leading-tight text-gray-400">{label}</span>
+					</div>
+				{/if}
+			{/each}
+		</div>
+	{:else if screenshots.length > 0}
+		<!-- Series mode: plain thumbnail strip -->
 		<div class="flex flex-wrap gap-2">
 			{#each screenshots as src, i (i)}
 				<div

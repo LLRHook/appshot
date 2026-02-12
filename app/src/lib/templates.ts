@@ -116,8 +116,8 @@ export const TEMPLATES: TemplateSchema[] = [
 			gradient_from: { type: 'color', label: 'Gradient Start', default: '#D4A574' },
 			gradient_to: { type: 'color', label: 'Gradient End', default: '#328983' },
 			gradient_angle: { type: 'number', label: 'Gradient Angle', min: 0, max: 360, default: 135 },
-			src_1: { type: 'image', label: 'Screenshot 1' },
-			src_2: { type: 'image', label: 'Screenshot 2' },
+			src_1: { type: 'image', label: 'Screenshot 1 (Left)' },
+			src_2: { type: 'image', label: 'Screenshot 2 (Right)' },
 		},
 	},
 	{

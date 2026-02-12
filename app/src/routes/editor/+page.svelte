@@ -25,6 +25,9 @@
 	const isSeriesMode = $derived(template ? 'slide' in template.params : false);
 	const isMultiImage = $derived(imageParamKeys.length > 1 || isSeriesMode);
 	const galleryMaxSlots = $derived(isSeriesMode ? 10 : imageParamKeys.length);
+	const gallerySlotLabels = $derived(
+		isSeriesMode ? [] : imageParamKeys.map((k) => template!.params[k].label.replace('Screenshot ', ''))
+	);
 	const hiddenImageParams = $derived(isMultiImage ? new Set(imageParamKeys) : new Set<string>());
 
 	// For series mode: also hide slide and total_slides — managed automatically
@@ -174,7 +177,7 @@
 			<div class="p-4">
 				{#if isMultiImage}
 					<div class="mb-4">
-						<ScreenshotGallery bind:screenshots maxSlots={galleryMaxSlots} />
+						<ScreenshotGallery bind:screenshots maxSlots={galleryMaxSlots} slotLabels={gallerySlotLabels} />
 					</div>
 				{/if}
 				<ParamSidebar
