@@ -10,6 +10,8 @@
 		'bold-type': 'background: #6C5CE7',
 		'glass-card': 'background: linear-gradient(135deg, #6C5CE7, #00B894)',
 		'panoramic': 'background: linear-gradient(135deg, #667EEA, #F093FB)',
+		'duo-side-by-side': 'background: linear-gradient(135deg, #D4A574, #328983)',
+		'duo-overlap': 'background: linear-gradient(135deg, #667EEA, #F093FB)',
 		'feature-callout': 'background: #f8f8f8',
 	};
 
