@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { DEVICE_SIZES, type DeviceSize } from '$lib/templates';
 	import type { ParamValues } from '$lib/stores';
+	import { downloadZip } from 'client-zip';
 
 	let {
 		templateId,
@@ -14,6 +15,7 @@
 
 	let exporting = $state(false);
 	let exportAll = $state(false);
+	let exportProgress = $state('');
 	let error = $state('');
 
 	async function renderOne(device: DeviceSize): Promise<Blob> {
@@ -62,15 +64,24 @@
 	async function handleExportAll() {
 		exportAll = true;
 		error = '';
+		exportProgress = '';
 		try {
-			for (const device of DEVICE_SIZES) {
+			const files: { name: string; input: Blob }[] = [];
+			for (let i = 0; i < DEVICE_SIZES.length; i++) {
+				const device = DEVICE_SIZES[i];
+				exportProgress = `${i + 1}/${DEVICE_SIZES.length}`;
 				const blob = await renderOne(device);
-				downloadBlob(blob, `${templateId}_${device.label.replace(/["\s]/g, '_')}_${device.width}x${device.height}.png`);
+				const name = `${templateId}_${device.label.replace(/["\s]/g, '_')}_${device.width}x${device.height}.png`;
+				files.push({ name, input: blob });
 			}
+
+			const zipBlob = await downloadZip(files).blob();
+			downloadBlob(zipBlob, `${templateId}_all_sizes.zip`);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Export failed';
 		} finally {
 			exportAll = false;
+			exportProgress = '';
 		}
 	}
 </script>
@@ -85,7 +96,7 @@
 		disabled={exporting || exportAll}
 		class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
 	>
-		{exportAll ? 'Exporting...' : 'Export All'}
+		{exportAll ? `Exporting ${exportProgress}...` : 'Export All (ZIP)'}
 	</button>
 
 	<button

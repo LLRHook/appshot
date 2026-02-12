@@ -27,6 +27,7 @@
 		"vitest": "^4.0.18"
 	},
 	"dependencies": {
-		"chrome-remote-interface": "^0.34.0"
+		"chrome-remote-interface": "^0.34.0",
+		"client-zip": "^2.5.0"
 	}
 }
