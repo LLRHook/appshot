@@ -1,0 +1,28 @@
+{
+  "id": "dark-minimal",
+  "name": "Dark Minimal",
+  "description": "Near-black background with white text and thin device outline",
+  "params": {
+    "headline": {
+      "type": "text",
+      "label": "Headline",
+      "maxLength": 40,
+      "default": "Your App Name"
+    },
+    "layout": {
+      "type": "enum",
+      "label": "Layout",
+      "options": ["text-above", "text-left", "text-right"],
+      "default": "text-above"
+    },
+    "accent_color": {
+      "type": "color",
+      "label": "Accent Color",
+      "default": "#328983"
+    },
+    "src": {
+      "type": "image",
+      "label": "Screenshot"
+    }
+  }
+}

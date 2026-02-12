@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dark Minimal Screenshot</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: #111;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .frame {
+    width: 100%;
+    height: 100%;
+    position: relative;
+  }
+
+  .headline {
+    color: #fff;
+    font-weight: 700;
+    line-height: 1.12;
+    letter-spacing: -0.02em;
+  }
+
+  .device-area {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .device-outline {
+    position: relative;
+    border: 1px solid rgba(255,255,255,0.15);
+    overflow: hidden;
+  }
+
+  .device-outline img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  /* text-above layout (default) */
+  .layout-text-above .frame {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .layout-text-above .headline-area {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 13%;
+    width: 100%;
+  }
+
+  .layout-text-above .headline {
+    font-size: 4.5vh;
+    text-align: center;
+    padding: 0 8%;
+  }
+
+  .layout-text-above .device-area {
+    flex: 1;
+    width: 100%;
+    padding: 0 5% 2%;
+  }
+
+  .layout-text-above .device-outline {
+    height: 92%;
+    aspect-ratio: var(--screen-ratio);
+    border-radius: 3vh;
+  }
+
+  /* text-left layout */
+  .layout-text-left .frame {
+    display: grid;
+    grid-template-columns: 40% 55%;
+    gap: 0 5%;
+    align-items: center;
+    height: 100%;
+  }
+
+  .layout-text-left .headline-area {
+    display: flex;
+    align-items: center;
+    padding-left: 6%;
+  }
+
+  .layout-text-left .headline {
+    font-size: 5vh;
+    text-align: left;
+    line-height: 1.15;
+  }
+
+  .layout-text-left .device-area {
+    height: 100%;
+    align-items: flex-end;
+    padding-top: 8%;
+  }
+
+  .layout-text-left .device-outline {
+    height: 80vh;
+    aspect-ratio: var(--screen-ratio);
+    border-radius: 3vh;
+  }
+
+  /* text-right layout */
+  .layout-text-right .frame {
+    display: grid;
+    grid-template-columns: 55% 40%;
+    gap: 0 5%;
+    align-items: center;
+    height: 100%;
+  }
+
+  .layout-text-right .headline-area {
+    display: flex;
+    align-items: center;
+    order: 2;
+    padding-right: 6%;
+  }
+
+  .layout-text-right .headline {
+    font-size: 5vh;
+    text-align: right;
+    line-height: 1.15;
+  }
+
+  .layout-text-right .device-area {
+    order: 1;
+    height: 100%;
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding-top: 6%;
+  }
+
+  .layout-text-right .device-outline {
+    height: 82vh;
+    aspect-ratio: var(--screen-ratio);
+    border-radius: 3vh;
+  }
+</style>
+</head>
+<body>
+  <div class="frame">
+    <div class="headline-area">
+      <h1 class="headline" id="headline"></h1>
+    </div>
+    <div class="device-area">
+      <div class="device-outline">
+        <img id="screenshot" src="" alt="App Screenshot" />
+      </div>
+    </div>
+  </div>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const layout = params.get('layout') || 'text-above';
+    const accentColor = '#' + (params.get('accent_color') || '328983');
+
+    document.body.classList.add(`layout-${layout}`);
+
+    const ratio = '9 / 19.5';
+    document.documentElement.style.setProperty('--screen-ratio', ratio);
+
+    document.getElementById('headline').textContent = params.get('headline') || '';
+    document.getElementById('screenshot').src = params.get('src') || '';
+
+    // Accent color on device outline border
+    document.querySelector('.device-outline').style.borderColor = accentColor + '40';
+  </script>
+</body>
+</html>

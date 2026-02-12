@@ -1,0 +1,27 @@
+{
+  "id": "clean-flat",
+  "name": "Clean Flat",
+  "description": "Solid color background, no device frame, rounded screenshot with subtle shadow",
+  "params": {
+    "headline": {
+      "type": "text",
+      "label": "Headline",
+      "maxLength": 40,
+      "default": "Your App Name"
+    },
+    "bg_color": {
+      "type": "color",
+      "label": "Background",
+      "default": "#F5F5F5"
+    },
+    "text_color": {
+      "type": "color",
+      "label": "Text Color",
+      "default": "#328983"
+    },
+    "src": {
+      "type": "image",
+      "label": "Screenshot"
+    }
+  }
+}

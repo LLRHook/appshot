@@ -1,0 +1,60 @@
+{
+  "id": "gradient-bezel",
+  "name": "Gradient + Device Bezel",
+  "description": "Warm-to-cool gradient background with minimal dark device bezel and Dynamic Island",
+  "params": {
+    "headline": {
+      "type": "text",
+      "label": "Headline",
+      "maxLength": 40,
+      "default": "Your App Name"
+    },
+    "layout": {
+      "type": "enum",
+      "label": "Layout",
+      "options": ["text-above", "text-left", "text-right", "split"],
+      "default": "text-above"
+    },
+    "device": {
+      "type": "enum",
+      "label": "Device Frame",
+      "options": ["iphone", "ipad"],
+      "default": "iphone"
+    },
+    "gradient_from": {
+      "type": "color",
+      "label": "Gradient Start",
+      "default": "#D4A574"
+    },
+    "gradient_to": {
+      "type": "color",
+      "label": "Gradient End",
+      "default": "#328983"
+    },
+    "gradient_angle": {
+      "type": "number",
+      "label": "Gradient Angle",
+      "min": 0,
+      "max": 360,
+      "default": 135
+    },
+    "src": {
+      "type": "image",
+      "label": "Screenshot"
+    },
+    "crop_x": {
+      "type": "number",
+      "label": "Crop X %",
+      "min": 0,
+      "max": 100,
+      "default": 50
+    },
+    "crop_y": {
+      "type": "number",
+      "label": "Crop Y %",
+      "min": 0,
+      "max": 100,
+      "default": 35
+    }
+  }
+}

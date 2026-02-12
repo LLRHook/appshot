@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Billington Screenshot</title>
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html, body {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .frame {
+    width: 100%;
+    height: 100%;
+    position: relative;
+  }
+
+  /* ── Headline ── */
+  .headline {
+    color: #D9B38C;
+    font-weight: 700;
+    line-height: 1.12;
+    letter-spacing: -0.02em;
+  }
+
+  /* ── Device frame ── */
+  .device-area {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .device-glow {
+    position: absolute;
+    width: 120%;
+    height: 120%;
+    top: -10%;
+    left: -10%;
+    background: radial-gradient(ellipse at center, rgba(255,255,255,0.12) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .device-frame {
+    position: relative;
+    z-index: 1;
+    background: #1a1a1a;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25), 0 8px 24px rgba(0,0,0,0.15);
+  }
+
+  /* iPhone bezel */
+  .device-iphone .device-frame {
+    border-radius: 4vh;
+    padding: 1.2vh;
+  }
+
+  /* iPad bezel */
+  .device-ipad .device-frame {
+    border-radius: 2.5vh;
+    padding: 0.8vh;
+  }
+
+  .device-screen {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .device-iphone .device-screen {
+    border-radius: 3.2vh;
+  }
+
+  .device-ipad .device-screen {
+    border-radius: 1.8vh;
+  }
+
+  .device-screen img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  /* Dynamic Island (iPhone only) */
+  .dynamic-island {
+    display: none;
+    position: absolute;
+    top: 1.4vh;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 12vh;
+    height: 3.2vh;
+    background: #000;
+    border-radius: 1.6vh;
+    z-index: 5;
+  }
+
+  .device-iphone .dynamic-island {
+    display: block;
+  }
+
+  /* ── Crop card (split layout only) ── */
+  .crop-card {
+    display: none;
+    overflow: hidden;
+    border-radius: 2.5vh;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.2), 0 6px 16px rgba(0,0,0,0.1);
+  }
+
+  .crop-card img {
+    display: block;
+    width: 200%;
+    height: 200%;
+    object-fit: cover;
+  }
+
+  /* ════════════════════════════════════════════
+     LAYOUT: text-above
+     Flex column, headline at top, device fills rest
+     ════════════════════════════════════════════ */
+  .layout-text-above .frame {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .layout-text-above .headline-area {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 13%;
+    width: 100%;
+  }
+
+  .layout-text-above .headline {
+    font-size: 4.5vh;
+    text-align: center;
+    padding: 0 8%;
+  }
+
+  .layout-text-above .device-area {
+    flex: 1;
+    width: 100%;
+    padding: 0 5% 2%;
+  }
+
+  .layout-text-above .device-frame {
+    height: 92%;
+    aspect-ratio: var(--screen-ratio);
+  }
+
+  /* ════════════════════════════════════════════
+     LAYOUT: text-left
+     2-column grid: text left 40%, device right 55%
+     ════════════════════════════════════════════ */
+  .layout-text-left .frame {
+    display: grid;
+    grid-template-columns: 40% 55%;
+    gap: 0 5%;
+    align-items: center;
+    height: 100%;
+  }
+
+  .layout-text-left .headline-area {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-left: 6%;
+  }
+
+  .layout-text-left .headline {
+    font-size: 5vh;
+    text-align: left;
+    line-height: 1.15;
+  }
+
+  .layout-text-left .device-area {
+    height: 100%;
+    align-items: flex-end;
+    padding-top: 8%;
+  }
+
+  .layout-text-left .device-frame {
+    height: 80vh;
+    aspect-ratio: var(--screen-ratio);
+  }
+
+  /* ════════════════════════════════════════════
+     LAYOUT: text-right
+     2-column grid: device left 55%, text right 40%
+     ════════════════════════════════════════════ */
+  .layout-text-right .frame {
+    display: grid;
+    grid-template-columns: 55% 40%;
+    gap: 0 5%;
+    align-items: center;
+    height: 100%;
+  }
+
+  .layout-text-right .headline-area {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    order: 2;
+    padding-right: 6%;
+  }
+
+  .layout-text-right .headline {
+    font-size: 5vh;
+    text-align: right;
+    line-height: 1.15;
+  }
+
+  .layout-text-right .device-area {
+    order: 1;
+    height: 100%;
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding-top: 6%;
+  }
+
+  .layout-text-right .device-frame {
+    height: 82vh;
+    aspect-ratio: var(--screen-ratio);
+  }
+
+  /* ════════════════════════════════════════════
+     LAYOUT: split
+     Headline spans top, device left + crop card right
+     ════════════════════════════════════════════ */
+  .layout-split .frame {
+    display: grid;
+    grid-template-columns: 50% 45%;
+    grid-template-rows: 14% 1fr;
+    gap: 0 5%;
+    height: 100%;
+  }
+
+  .layout-split .headline-area {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .layout-split .headline {
+    font-size: 4.5vh;
+    text-align: center;
+  }
+
+  .layout-split .device-area {
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding-left: 4%;
+    padding-top: 2%;
+  }
+
+  .layout-split .device-frame {
+    height: 76vh;
+    aspect-ratio: var(--screen-ratio);
+  }
+
+  .layout-split .crop-card {
+    display: block;
+    align-self: center;
+    width: 85%;
+    height: 55vh;
+    margin-right: 4%;
+  }
+
+  /* ════════════════════════════════════════════
+     iPad overrides
+     ════════════════════════════════════════════ */
+
+  /* text-above iPad */
+  .device-ipad.layout-text-above .headline {
+    font-size: 5vh;
+  }
+
+  .device-ipad.layout-text-above .device-frame {
+    height: 88%;
+  }
+
+  /* text-left iPad */
+  .device-ipad.layout-text-left .frame {
+    grid-template-columns: 38% 58%;
+    gap: 0 4%;
+  }
+
+  .device-ipad.layout-text-left .headline {
+    font-size: 5.5vh;
+  }
+
+  .device-ipad.layout-text-left .device-frame {
+    height: 75vh;
+  }
+
+  /* text-right iPad */
+  .device-ipad.layout-text-right .frame {
+    grid-template-columns: 58% 38%;
+    gap: 0 4%;
+  }
+
+  .device-ipad.layout-text-right .headline {
+    font-size: 5.5vh;
+  }
+
+  .device-ipad.layout-text-right .device-frame {
+    height: 78vh;
+  }
+
+  /* split iPad */
+  .device-ipad.layout-split .frame {
+    grid-template-columns: 48% 47%;
+    gap: 0 5%;
+  }
+
+  .device-ipad.layout-split .headline {
+    font-size: 5vh;
+  }
+
+  .device-ipad.layout-split .device-frame {
+    height: 70vh;
+  }
+
+  .device-ipad.layout-split .crop-card {
+    height: 48vh;
+  }
+</style>
+</head>
+<body>
+  <div class="frame">
+    <div class="headline-area">
+      <h1 class="headline" id="headline"></h1>
+    </div>
+    <div class="device-area">
+      <div class="device-glow"></div>
+      <div class="device-frame">
+        <div class="device-screen">
+          <img id="screenshot" src="" alt="App Screenshot" />
+        </div>
+        <div class="dynamic-island"></div>
+      </div>
+    </div>
+    <div class="crop-card" id="crop-card">
+      <img id="crop-screenshot" src="" alt="Crop Detail" />
+    </div>
+  </div>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+
+    // Read params
+    const headline = params.get('headline') || '';
+    const src = params.get('src') || '';
+    const layout = params.get('layout') || 'text-above';
+    const device = params.get('device') || 'iphone';
+    const gradientFrom = params.get('gradient_from') || 'D4A574';
+    const gradientTo = params.get('gradient_to') || '328983';
+    const gradientAngle = params.get('gradient_angle') || '135';
+    const cropX = params.get('crop_x') || '50';
+    const cropY = params.get('crop_y') || '35';
+
+    // Set body classes for layout + device
+    document.body.classList.add(`layout-${layout}`, `device-${device}`);
+
+    // Set gradient background
+    document.body.style.background = `linear-gradient(${gradientAngle}deg, #${gradientFrom}, #${gradientTo})`;
+
+    // Set screen aspect ratio as CSS variable (iPhone ~9:19.5, iPad ~3:4)
+    const ratio = device === 'ipad' ? '3 / 4' : '9 / 19.5';
+    document.documentElement.style.setProperty('--screen-ratio', ratio);
+
+    // Set content
+    document.getElementById('headline').textContent = headline;
+    document.getElementById('screenshot').src = src;
+
+    // Dynamic Island: visible only for iPhone
+    const island = document.querySelector('.dynamic-island');
+    if (device !== 'iphone') {
+      island.style.display = 'none';
+    }
+
+    // Crop card: visible only for split layout
+    if (layout === 'split' && src) {
+      const cropCard = document.getElementById('crop-card');
+      const cropImg = document.getElementById('crop-screenshot');
+      cropImg.src = src;
+      cropImg.style.objectPosition = `${cropX}% ${cropY}%`;
+    }
+  </script>
+</body>
+</html>
