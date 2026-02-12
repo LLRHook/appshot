@@ -112,6 +112,7 @@ export const TEMPLATES: TemplateSchema[] = [
 		description: 'Two devices side-by-side with a shared gradient background. Upload two screenshots to showcase different screens.',
 		params: {
 			headline: { type: 'text', label: 'Headline', maxLength: 40, default: 'Your App Name' },
+			subtitle: { type: 'text', label: 'Subtitle', maxLength: 60 },
 			device: { type: 'enum', label: 'Device Frame', options: ['iphone', 'ipad'], default: 'iphone' },
 			gradient_from: { type: 'color', label: 'Gradient Start', default: '#D4A574' },
 			gradient_to: { type: 'color', label: 'Gradient End', default: '#328983' },
@@ -126,6 +127,7 @@ export const TEMPLATES: TemplateSchema[] = [
 		description: 'Two devices with depth — front phone overlaps the back for a layered, 3D-like effect.',
 		params: {
 			headline: { type: 'text', label: 'Headline', maxLength: 40, default: 'Your App Name' },
+			subtitle: { type: 'text', label: 'Subtitle', maxLength: 60 },
 			device: { type: 'enum', label: 'Device Frame', options: ['iphone', 'ipad'], default: 'iphone' },
 			gradient_from: { type: 'color', label: 'Gradient Start', default: '#667EEA' },
 			gradient_to: { type: 'color', label: 'Gradient End', default: '#F093FB' },
