@@ -7,6 +7,10 @@
 		'gradient-bezel': 'background: linear-gradient(135deg, #D4A574, #328983)',
 		'clean-flat': 'background: #F5F5F5',
 		'dark-minimal': 'background: #111',
+		'bold-type': 'background: #6C5CE7',
+		'glass-card': 'background: linear-gradient(135deg, #6C5CE7, #00B894)',
+		'panoramic': 'background: linear-gradient(135deg, #667EEA, #F093FB)',
+		'feature-callout': 'background: #f8f8f8',
 	};
 
 	const thumbStyle = $derived(THUMB_STYLES[template.id] || 'background: #e5e7eb');

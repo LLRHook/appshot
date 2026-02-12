@@ -1,0 +1,12 @@
+{
+  "id": "bold-type",
+  "name": "Bold Type",
+  "description": "Giant headline dominates the frame with a vibrant background. Marketing-first, Apple-style impact.",
+  "params": {
+    "headline": { "type": "text", "label": "Headline", "maxLength": 20, "default": "DO MORE" },
+    "subtitle": { "type": "text", "label": "Subtitle", "maxLength": 60, "default": "The smarter way to get things done" },
+    "bg_color": { "type": "color", "label": "Background", "default": "#6C5CE7" },
+    "text_color": { "type": "color", "label": "Text Color", "default": "#FFFFFF" },
+    "src": { "type": "image", "label": "Screenshot" }
+  }
+}

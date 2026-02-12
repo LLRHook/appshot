@@ -1,0 +1,12 @@
+{
+  "id": "glass-card",
+  "name": "Glass Card",
+  "description": "Frosted glass surface on a mesh gradient background. Modern iOS aesthetic with depth and blur.",
+  "params": {
+    "headline": { "type": "text", "label": "Headline", "maxLength": 40, "default": "Your App Name" },
+    "color_1": { "type": "color", "label": "Orb 1", "default": "#6C5CE7" },
+    "color_2": { "type": "color", "label": "Orb 2", "default": "#00B894" },
+    "color_3": { "type": "color", "label": "Orb 3", "default": "#FD79A8" },
+    "src": { "type": "image", "label": "Screenshot" }
+  }
+}

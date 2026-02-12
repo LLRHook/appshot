@@ -68,6 +68,58 @@ export const TEMPLATES: TemplateSchema[] = [
 			src: { type: 'image', label: 'Screenshot' },
 		},
 	},
+	{
+		id: 'bold-type',
+		name: 'Bold Type',
+		description: 'Giant headline dominates the frame with a vibrant background. Marketing-first, Apple-style impact.',
+		params: {
+			headline: { type: 'text', label: 'Headline', maxLength: 20, default: 'DO MORE' },
+			subtitle: { type: 'text', label: 'Subtitle', maxLength: 60, default: 'The smarter way to get things done' },
+			bg_color: { type: 'color', label: 'Background', default: '#6C5CE7' },
+			text_color: { type: 'color', label: 'Text Color', default: '#FFFFFF' },
+			src: { type: 'image', label: 'Screenshot' },
+		},
+	},
+	{
+		id: 'glass-card',
+		name: 'Glass Card',
+		description: 'Frosted glass surface on a mesh gradient background. Modern iOS aesthetic with depth and blur.',
+		params: {
+			headline: { type: 'text', label: 'Headline', maxLength: 40, default: 'Your App Name' },
+			color_1: { type: 'color', label: 'Orb 1', default: '#6C5CE7' },
+			color_2: { type: 'color', label: 'Orb 2', default: '#00B894' },
+			color_3: { type: 'color', label: 'Orb 3', default: '#FD79A8' },
+			src: { type: 'image', label: 'Screenshot' },
+		},
+	},
+	{
+		id: 'panoramic',
+		name: 'Panoramic Flow',
+		description: 'Continuous gradient that flows across multiple screenshots. Set the slide number to create a seamless series.',
+		params: {
+			headline: { type: 'text', label: 'Headline', maxLength: 40, default: 'Your App Name' },
+			gradient_from: { type: 'color', label: 'Gradient Start', default: '#667EEA' },
+			gradient_to: { type: 'color', label: 'Gradient End', default: '#F093FB' },
+			gradient_angle: { type: 'number', label: 'Gradient Angle', min: 0, max: 360, default: 135 },
+			slide: { type: 'number', label: 'Slide Number', min: 1, max: 10, default: 1 },
+			total_slides: { type: 'number', label: 'Total Slides', min: 2, max: 10, default: 5 },
+			src: { type: 'image', label: 'Screenshot' },
+		},
+	},
+	{
+		id: 'feature-callout',
+		name: 'Feature Callout',
+		description: 'Clean background with centered screenshot and a floating badge highlighting a key feature.',
+		params: {
+			headline: { type: 'text', label: 'Headline', maxLength: 40, default: 'Your App Name' },
+			badge_text: { type: 'text', label: 'Badge Text', maxLength: 24, default: 'New Feature' },
+			badge_position: { type: 'enum', label: 'Badge Position', options: ['top', 'middle', 'bottom'], default: 'middle' },
+			bg_color: { type: 'color', label: 'Background', default: '#FFFFFF' },
+			text_color: { type: 'color', label: 'Text Color', default: '#1A1A1A' },
+			accent_color: { type: 'color', label: 'Accent Color', default: '#328983' },
+			src: { type: 'image', label: 'Screenshot' },
+		},
+	},
 ];
 
 export function getTemplate(id: string): TemplateSchema | undefined {

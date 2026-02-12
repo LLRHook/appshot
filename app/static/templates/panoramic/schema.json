@@ -1,0 +1,14 @@
+{
+  "id": "panoramic",
+  "name": "Panoramic Flow",
+  "description": "Continuous gradient that flows across multiple screenshots. Set the slide number to create a seamless series.",
+  "params": {
+    "headline": { "type": "text", "label": "Headline", "maxLength": 40, "default": "Your App Name" },
+    "gradient_from": { "type": "color", "label": "Gradient Start", "default": "#667EEA" },
+    "gradient_to": { "type": "color", "label": "Gradient End", "default": "#F093FB" },
+    "gradient_angle": { "type": "number", "label": "Gradient Angle", "min": 0, "max": 360, "default": 135 },
+    "slide": { "type": "number", "label": "Slide Number", "min": 1, "max": 10, "default": 1 },
+    "total_slides": { "type": "number", "label": "Total Slides", "min": 2, "max": 10, "default": 5 },
+    "src": { "type": "image", "label": "Screenshot" }
+  }
+}

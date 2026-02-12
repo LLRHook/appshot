@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panoramic Screenshot</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .headline-area {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 13%;
+    width: 100%;
+  }
+
+  .headline {
+    font-weight: 700;
+    font-size: 4.2vh;
+    text-align: center;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: rgba(255,255,255,0.95);
+    padding: 0 8%;
+  }
+
+  .device-area {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 0 8% 3%;
+  }
+
+  .device-frame {
+    position: relative;
+    background: #1a1a1a;
+    border-radius: 4vh;
+    padding: 1.2vh;
+    height: 90%;
+    aspect-ratio: 9 / 19.5;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.2);
+  }
+
+  .device-screen {
+    width: 100%;
+    height: 100%;
+    border-radius: 3.2vh;
+    overflow: hidden;
+  }
+
+  .device-screen img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .dynamic-island {
+    position: absolute;
+    top: 2.4vh;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 12vh;
+    height: 3.2vh;
+    background: #000;
+    border-radius: 1.6vh;
+    z-index: 5;
+  }
+</style>
+</head>
+<body>
+  <div class="headline-area">
+    <h1 class="headline" id="headline"></h1>
+  </div>
+  <div class="device-area">
+    <div class="device-frame">
+      <div class="device-screen">
+        <img id="screenshot" src="" alt="App Screenshot" />
+      </div>
+      <div class="dynamic-island"></div>
+    </div>
+  </div>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const colorFrom = '#' + (params.get('gradient_from') || '667eea');
+    const colorTo = '#' + (params.get('gradient_to') || 'f093fb');
+    const angle = parseInt(params.get('gradient_angle') || '135');
+    const slide = parseInt(params.get('slide') || '1');
+    const totalSlides = parseInt(params.get('total_slides') || '5');
+
+    // Panoramic effect: shift gradient based on slide position
+    // Each slide shows a different portion of a wider gradient
+    const offset = ((slide - 1) / (totalSlides - 1)) * 100;
+
+    // Create a gradient that shifts based on slide number
+    // Using background-size > 100% and background-position to create the panoramic slice
+    document.body.style.background = `linear-gradient(${angle}deg, ${colorFrom}, ${colorTo})`;
+    document.body.style.backgroundSize = `${totalSlides * 100}% 100%`;
+    document.body.style.backgroundPosition = `${offset}% 0%`;
+
+    document.getElementById('headline').textContent = params.get('headline') || '';
+    document.getElementById('screenshot').src = params.get('src') || '';
+  </script>
+</body>
+</html>

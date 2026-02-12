@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Feature Callout Screenshot</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .headline-area {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 11%;
+    width: 100%;
+  }
+
+  .headline {
+    font-weight: 700;
+    font-size: 4.2vh;
+    text-align: center;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    padding: 0 8%;
+  }
+
+  .screenshot-area {
+    flex: 1;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    width: 100%;
+    padding: 1% 8% 0;
+    position: relative;
+  }
+
+  .screenshot-wrapper {
+    position: relative;
+    height: 100%;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+  }
+
+  .screenshot-wrapper img {
+    height: 100%;
+    object-fit: contain;
+    border-radius: 2.5vh;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
+  }
+
+  .callout-badge {
+    position: absolute;
+    right: -2vh;
+    padding: 1.2vh 2.5vh;
+    border-radius: 5vh;
+    font-weight: 600;
+    font-size: 2vh;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+  }
+
+  .callout-badge::before {
+    content: '';
+    position: absolute;
+    left: -1vh;
+    top: 50%;
+    transform: translateY(-50%) rotate(45deg);
+    width: 2vh;
+    height: 2vh;
+  }
+
+  /* Badge positions */
+  .badge-top { top: 15%; }
+  .badge-middle { top: 40%; }
+  .badge-bottom { top: 65%; }
+</style>
+</head>
+<body>
+  <div class="headline-area">
+    <h1 class="headline" id="headline"></h1>
+  </div>
+  <div class="screenshot-area">
+    <div class="screenshot-wrapper">
+      <img id="screenshot" src="" alt="App Screenshot" />
+      <div class="callout-badge" id="badge"></div>
+    </div>
+  </div>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const bgColor = '#' + (params.get('bg_color') || 'FFFFFF');
+    const textColor = '#' + (params.get('text_color') || '1a1a1a');
+    const accentColor = '#' + (params.get('accent_color') || '328983');
+    const badgeText = params.get('badge_text') || 'New Feature';
+    const badgePosition = params.get('badge_position') || 'middle';
+
+    document.body.style.background = bgColor;
+    document.getElementById('headline').style.color = textColor;
+    document.getElementById('headline').textContent = params.get('headline') || '';
+    document.getElementById('screenshot').src = params.get('src') || '';
+
+    const badge = document.getElementById('badge');
+    badge.textContent = badgeText;
+    badge.style.background = accentColor;
+    badge.style.color = '#fff';
+    badge.classList.add(`badge-${badgePosition}`);
+  </script>
+</body>
+</html>

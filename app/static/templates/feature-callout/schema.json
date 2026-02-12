@@ -1,0 +1,14 @@
+{
+  "id": "feature-callout",
+  "name": "Feature Callout",
+  "description": "Clean background with centered screenshot and a floating badge highlighting a key feature.",
+  "params": {
+    "headline": { "type": "text", "label": "Headline", "maxLength": 40, "default": "Your App Name" },
+    "badge_text": { "type": "text", "label": "Badge Text", "maxLength": 24, "default": "New Feature" },
+    "badge_position": { "type": "enum", "label": "Badge Position", "options": ["top", "middle", "bottom"], "default": "middle" },
+    "bg_color": { "type": "color", "label": "Background", "default": "#FFFFFF" },
+    "text_color": { "type": "color", "label": "Text Color", "default": "#1A1A1A" },
+    "accent_color": { "type": "color", "label": "Accent Color", "default": "#328983" },
+    "src": { "type": "image", "label": "Screenshot" }
+  }
+}
