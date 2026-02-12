@@ -9,7 +9,7 @@
  *   2. Start the dev server:
  *      cd app && npm run dev
  *
- * Usage:
+ * Usage (from app/):
  *   node scripts/generate-thumbnails.js
  *   node scripts/generate-thumbnails.js --base-url http://localhost:5173
  */
@@ -20,7 +20,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const STATIC_DIR = join(__dirname, '..', 'app', 'static', 'templates');
+const STATIC_DIR = join(__dirname, '..', 'static', 'templates');
 
 const TEMPLATES = [
 	{
