@@ -19,6 +19,9 @@
 	let aiHeadlines: string[] = $state([]);
 	let aiLoading = $state(false);
 
+	// Mobile sidebar state
+	let sidebarOpen = $state(false);
+
 	// Style Match state
 	let showStyleMatch = $state(false);
 	let styleMatchLoading = $state(false);
@@ -98,7 +101,8 @@
 
 {#if template}
 	<div class="flex h-screen flex-col bg-gray-50 lg:flex-row">
-		<aside class="w-full shrink-0 overflow-y-auto border-b border-gray-200 bg-white lg:w-80 lg:border-b-0 lg:border-r">
+		<!-- Sidebar: collapsible on mobile, always visible on desktop -->
+		<aside class="w-full shrink-0 overflow-y-auto border-b border-gray-200 bg-white lg:w-80 lg:border-b-0 lg:border-r {sidebarOpen ? '' : 'max-lg:hidden'}">
 			<div class="border-b border-gray-100 px-4 py-3">
 				<div class="flex items-center justify-between">
 					<a href="/" class="text-sm text-gray-500 hover:text-gray-700">&larr; Back</a>
@@ -121,9 +125,30 @@
 					onHeadlineAI={() => showHeadlineAI = !showHeadlineAI}
 				/>
 			</div>
+			<!-- Close sidebar button on mobile -->
+			<div class="border-t border-gray-100 p-3 lg:hidden">
+				<button
+					onclick={() => sidebarOpen = false}
+					class="w-full rounded-lg bg-gray-100 py-2 text-sm font-medium text-gray-600"
+				>
+					Done
+				</button>
+			</div>
 		</aside>
 
-		<div class="flex min-h-0 flex-1 flex-col">
+		<!-- Mobile toolbar: back + toggle sidebar + template name -->
+		<div class="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2 lg:hidden">
+			<a href="/" class="text-sm text-gray-500 hover:text-gray-700">&larr;</a>
+			<span class="text-sm font-semibold text-gray-900">{template.name}</span>
+			<button
+				onclick={() => sidebarOpen = !sidebarOpen}
+				class="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50"
+			>
+				{sidebarOpen ? 'Preview' : 'Edit'}
+			</button>
+		</div>
+
+		<div class="flex min-h-0 flex-1 flex-col {sidebarOpen ? 'max-lg:hidden' : ''}">
 			<div class="min-h-0 flex-1">
 				<LivePreview
 					{templateId}
@@ -133,9 +158,14 @@
 				/>
 			</div>
 
-			<div class="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3">
-				<DeviceTabs selected={selectedDevice} onSelect={onDeviceChange} />
-				<ExportButton {templateId} {params} {selectedDevice} />
+			<!-- Sticky footer: device tabs + export -->
+			<div class="sticky bottom-0 z-10 border-t border-gray-200 bg-white px-4 py-3">
+				<div class="flex items-center justify-between gap-2">
+					<div class="overflow-x-auto">
+						<DeviceTabs selected={selectedDevice} onSelect={onDeviceChange} />
+					</div>
+					<ExportButton {templateId} {params} {selectedDevice} />
+				</div>
 			</div>
 		</div>
 	</div>
