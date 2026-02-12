@@ -49,7 +49,47 @@ const TEMPLATES = [
 		params: {
 			headline: 'Your App Name',
 			layout: 'text-above',
-			accent_color: '#328983',
+			accent_color: '328983',
+		},
+	},
+	{
+		id: 'bold-type',
+		params: {
+			headline: 'DO MORE',
+			subtitle: 'The smarter way to get things done',
+			bg_color: '6C5CE7',
+			text_color: 'FFFFFF',
+		},
+	},
+	{
+		id: 'glass-card',
+		params: {
+			headline: 'Your App Name',
+			color_1: '6C5CE7',
+			color_2: '00B894',
+			color_3: 'FD79A8',
+		},
+	},
+	{
+		id: 'panoramic',
+		params: {
+			headline: 'Your App Name',
+			gradient_from: '667EEA',
+			gradient_to: 'F093FB',
+			gradient_angle: '135',
+			slide: '3',
+			total_slides: '5',
+		},
+	},
+	{
+		id: 'feature-callout',
+		params: {
+			headline: 'Your App Name',
+			badge_text: 'New Feature',
+			badge_position: 'middle',
+			bg_color: 'F0F0F0',
+			text_color: '1a1a1a',
+			accent_color: '328983',
 		},
 	},
 ];
