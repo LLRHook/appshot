@@ -1,9 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import CDP from 'chrome-remote-interface';
-import { writeFileSync, unlinkSync, mkdtempSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
 
 export const POST: RequestHandler = async ({ request, url }) => {
 	const body = await request.json();
@@ -18,31 +15,20 @@ export const POST: RequestHandler = async ({ request, url }) => {
 		return json({ error: 'Missing templateId, width, or height' }, { status: 400 });
 	}
 
-	// Write any data URL params to temp files and replace with file:// URLs
-	const tempFiles: string[] = [];
-	const renderParams = { ...params };
-
-	const tempDir = mkdtempSync(join(tmpdir(), 'appshot-'));
-	for (const [key, value] of Object.entries(renderParams)) {
-		if (typeof value === 'string' && value.startsWith('data:')) {
-			const tempFile = join(tempDir, `${key}.png`);
-			const base64Data = value.split(',')[1];
-			writeFileSync(tempFile, Buffer.from(base64Data, 'base64'));
-			renderParams[key] = `file://${tempFile}`;
-			tempFiles.push(tempFile);
-		}
-	}
-
-	// Build template URL — use the dev server's own origin for template files
+	// Separate data URL images from regular params
+	const imageParams: Record<string, string> = {};
 	const searchParams = new URLSearchParams();
-	for (const [key, value] of Object.entries(renderParams)) {
-		if (value !== undefined && value !== '') {
-			const strVal = String(value);
-			if (strVal.match(/^#[0-9a-fA-F]{3,8}$/)) {
-				searchParams.set(key, strVal.slice(1));
-			} else {
-				searchParams.set(key, strVal);
-			}
+
+	for (const [key, value] of Object.entries(params)) {
+		if (value === undefined || value === '') continue;
+		const strVal = String(value);
+
+		if (strVal.startsWith('data:')) {
+			imageParams[key] = strVal;
+		} else if (strVal.match(/^#[0-9a-fA-F]{3,8}$/)) {
+			searchParams.set(key, strVal.slice(1));
+		} else {
+			searchParams.set(key, strVal);
 		}
 	}
 
@@ -64,17 +50,39 @@ export const POST: RequestHandler = async ({ request, url }) => {
 		await Page.navigate({ url: templateUrl });
 		await Page.loadEventFired();
 
-		// Wait for all images in the template to load
+		// Inject images directly via DOM manipulation (avoids file:// security restrictions)
+		if (Object.keys(imageParams).length > 0) {
+			const imageEntries = JSON.stringify(
+				Object.entries(imageParams).map(([key, dataUrl]) => {
+					// Map param key to img element ID: src -> screenshot, src_1 -> screenshot-1
+					const imgId = key === 'src' ? 'screenshot' : 'screenshot-' + key.split('_')[1];
+					return [imgId, dataUrl];
+				})
+			);
+
+			await Runtime.evaluate({
+				expression: `(() => {
+					const entries = ${imageEntries};
+					for (const [imgId, dataUrl] of entries) {
+						const img = document.getElementById(imgId);
+						if (img) img.src = dataUrl;
+					}
+				})()`,
+			});
+		}
+
+		// Wait for all images to load (with 15s timeout safety net)
 		await Runtime.evaluate({
-			expression: `new Promise((resolve) => {
+			expression: `new Promise((resolve, reject) => {
+				const timeout = setTimeout(() => reject(new Error('Image loading timed out after 15s')), 15000);
 				const check = () => {
 					const images = document.querySelectorAll('img[id]');
-					if (images.length === 0) { resolve(true); return; }
+					if (images.length === 0) { clearTimeout(timeout); resolve(true); return; }
 					const allLoaded = Array.from(images).every(img => {
 						if (!img.src || img.src === window.location.href) return true;
 						return img.complete && img.naturalWidth > 0;
 					});
-					if (allLoaded) { resolve(true); return; }
+					if (allLoaded) { clearTimeout(timeout); resolve(true); return; }
 					setTimeout(check, 100);
 				};
 				check();
@@ -103,8 +111,5 @@ export const POST: RequestHandler = async ({ request, url }) => {
 		);
 	} finally {
 		if (client) await client.close();
-		for (const f of tempFiles) {
-			try { unlinkSync(f); } catch {}
-		}
 	}
 };
