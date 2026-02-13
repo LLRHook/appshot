@@ -110,7 +110,7 @@
     border-radius: 1.6vh;
     z-index: 5;
   }
-  .frame-bezel.device-iphone .dynamic-island { display: block; }
+  .frame-bezel.device-iphone .dynamic-island { display: none; }
   .frame-bezel.device-ipad .dynamic-island { display: none; }
 
   /* --- Clay (matte colored frame, soft feel) --- */
@@ -251,7 +251,7 @@
      ════════════════════════════════════════ */
   .layout-text-left .frame {
     display: grid;
-    grid-template-columns: 40% 55%;
+    grid-template-columns: 40% 1fr;
     gap: 0 5%;
     align-items: center;
     height: 100%;
@@ -272,16 +272,19 @@
     text-align: left;
   }
   .layout-text-left .device-area {
-    height: 100%;
+    position: absolute;
+    left: 45%;
+    top: 0;
+    bottom: 0;
     display: flex;
     align-items: flex-end;
-    justify-content: center;
+    justify-content: flex-start;
     padding-top: 8%;
-    position: relative;
   }
   .layout-text-left .device-frame {
     height: 80vh;
     aspect-ratio: var(--screen-ratio);
+    flex-shrink: 0;
   }
 
   /* ════════════════════════════════════════
@@ -289,7 +292,7 @@
      ════════════════════════════════════════ */
   .layout-text-right .frame {
     display: grid;
-    grid-template-columns: 55% 40%;
+    grid-template-columns: 1fr 40%;
     gap: 0 5%;
     align-items: center;
     height: 100%;
@@ -298,7 +301,7 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
-    order: 2;
+    grid-column: 2;
     padding-right: 6%;
     gap: 1vh;
   }
@@ -311,17 +314,19 @@
     text-align: right;
   }
   .layout-text-right .device-area {
-    order: 1;
-    height: 100%;
+    position: absolute;
+    right: 45%;
+    top: 0;
+    bottom: 0;
     display: flex;
     align-items: flex-end;
     justify-content: flex-end;
     padding-top: 6%;
-    position: relative;
   }
   .layout-text-right .device-frame {
     height: 82vh;
     aspect-ratio: var(--screen-ratio);
+    flex-shrink: 0;
   }
 
   /* ════════════════════════════════════════
@@ -551,8 +556,8 @@
     background: #1a1a1a;
   }
   .has-perspective .phone-edge { display: block; }
-  .has-perspective .frame-none .phone-edge,
-  .has-perspective .frame-wireframe .phone-edge { display: none; }
+  .has-perspective.frame-none .phone-edge,
+  .has-perspective.frame-wireframe .phone-edge { display: none; }
 
   .phone-edge-right {
     top: 0; right: 0; width: 1.2vh; height: 100%;
@@ -610,11 +615,13 @@
      ════════════════════════════════════════ */
   .device-ipad.layout-text-above .headline { font-size: 5vh; }
   .device-ipad.layout-text-above .device-frame { height: 88%; }
-  .device-ipad.layout-text-left .frame { grid-template-columns: 38% 58%; gap: 0 4%; }
+  .device-ipad.layout-text-left .frame { grid-template-columns: 38% 1fr; gap: 0 4%; }
   .device-ipad.layout-text-left .headline { font-size: 5.5vh; }
+  .device-ipad.layout-text-left .device-area { left: 42%; }
   .device-ipad.layout-text-left .device-frame { height: 75vh; }
-  .device-ipad.layout-text-right .frame { grid-template-columns: 58% 38%; gap: 0 4%; }
+  .device-ipad.layout-text-right .frame { grid-template-columns: 1fr 38%; gap: 0 4%; }
   .device-ipad.layout-text-right .headline { font-size: 5.5vh; }
+  .device-ipad.layout-text-right .device-area { right: 42%; }
   .device-ipad.layout-text-right .device-frame { height: 78vh; }
   .device-ipad.layout-split .frame { grid-template-columns: 48% 47%; gap: 0 5%; }
   .device-ipad.layout-split .headline { font-size: 5vh; }
