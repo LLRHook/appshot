@@ -81,14 +81,20 @@
 		}
 	});
 
-	// Auto-save to localStorage (debounced)
+	// Auto-save to localStorage (debounced, skips initial render)
 	let saveTimer: ReturnType<typeof setTimeout>;
+	let hasInitialized = false;
 	$effect(() => {
 		// Touch reactive dependencies for Svelte tracking
 		void JSON.stringify(config);
 		void screenshots.length;
 		void selectedDevice.label;
 		void currentSlide;
+
+		if (!hasInitialized) {
+			hasInitialized = true;
+			return;
+		}
 
 		clearTimeout(saveTimer);
 		saveTimer = setTimeout(async () => {
@@ -199,6 +205,7 @@
 		currentSlide = 0;
 		selectedDevice = DEVICE_SIZES[0];
 		saveStatus = 'idle';
+		hasInitialized = false;
 	}
 
 	const presetName = $derived.by(() => {
