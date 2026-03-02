@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { untrack, onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { DEVICE_SIZES, type DeviceSize } from '$lib/templates';
 	import { DEFAULT_CONFIG, configToParams, type ComposableConfig } from '$lib/layers';
@@ -61,15 +61,9 @@
 		return p;
 	});
 
-	// Load priority: preset param > localStorage > defaults
-	$effect(() => {
-		const pId = presetId;
-		if (pId) {
-			const presetConfig = getPresetConfig(pId);
-			if (presetConfig) {
-				config = structuredClone(presetConfig);
-			}
-		} else {
+	// Restore from localStorage once on mount (only if no preset param)
+	onMount(() => {
+		if (!presetId) {
 			const saved = loadEditorState();
 			if (saved) {
 				config = saved.config;
@@ -80,6 +74,21 @@
 			}
 		}
 	});
+
+	// Apply preset when URL ?preset= param changes
+	$effect(() => {
+		const pId = presetId;
+		if (pId) {
+			const presetConfig = getPresetConfig(pId);
+			if (presetConfig) {
+				config = structuredClone(presetConfig);
+			}
+		}
+	});
+
+	// Cache compressed screenshots so we only re-compress when images change
+	let cachedRawScreenshots: string[] = [];
+	let cachedCompressed: string[] = [];
 
 	// Auto-save to localStorage (debounced, skips initial render)
 	let saveTimer: ReturnType<typeof setTimeout>;
@@ -98,7 +107,19 @@
 
 		clearTimeout(saveTimer);
 		saveTimer = setTimeout(async () => {
-			const compressed = await compressScreenshots(untrack(() => screenshots));
+			const raw = untrack(() => screenshots);
+			const needsRecompress = raw.length !== cachedRawScreenshots.length ||
+				raw.some((url, i) => url !== cachedRawScreenshots[i]);
+
+			let compressed: string[];
+			if (needsRecompress) {
+				compressed = await compressScreenshots(raw);
+				cachedRawScreenshots = raw;
+				cachedCompressed = compressed;
+			} else {
+				compressed = cachedCompressed;
+			}
+
 			const result = saveEditorState({
 				config: untrack(() => config),
 				screenshots: compressed,
@@ -206,6 +227,8 @@
 		selectedDevice = DEVICE_SIZES[0];
 		saveStatus = 'idle';
 		hasInitialized = false;
+		cachedRawScreenshots = [];
+		cachedCompressed = [];
 	}
 
 	const presetName = $derived.by(() => {
