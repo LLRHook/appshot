@@ -5,6 +5,7 @@ export interface Preset {
 	name: string;
 	description: string;
 	config: ComposableConfig;
+	hasThumb?: boolean;
 }
 
 const FLAT_PERSPECTIVE = { preset: 'flat' as const, rotateX: 0, rotateY: 0, rotateZ: 0, perspective: 1000 };
@@ -131,6 +132,7 @@ export const PRESETS: Preset[] = [
 		id: 'hero-3d',
 		name: 'Hero 3D',
 		description: 'Dark gradient with a dramatic 3D hero-shot angle. Premium bezel frame with visible phone edges.',
+		hasThumb: false,
 		config: {
 			background: { type: 'linear-gradient', color1: '#0F0C29', color2: '#302B63', color3: '#24243E', angle: 135 },
 			device: { style: 'bezel', device: 'iphone', clayColor: '#E8DED5' },
@@ -144,6 +146,7 @@ export const PRESETS: Preset[] = [
 		id: 'clay-tilt',
 		name: 'Clay Tilt',
 		description: 'Warm gradient with a tilted clay frame. Soft, tactile 3D mockup feel.',
+		hasThumb: false,
 		config: {
 			background: { type: 'linear-gradient', color1: '#FFECD2', color2: '#FCB69F', color3: '#FD79A8', angle: 135 },
 			device: { style: 'clay', device: 'iphone', clayColor: '#F5E6D3' },

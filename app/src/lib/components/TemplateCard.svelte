@@ -26,7 +26,7 @@
 	href="/editor?preset={preset.id}"
 	class="group block rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md hover:border-gray-300"
 >
-	{#if !imgFailed}
+	{#if preset.hasThumb !== false && !imgFailed}
 		<img
 			src={thumbSrc}
 			alt="{preset.name} preview"

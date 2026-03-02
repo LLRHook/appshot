@@ -54,7 +54,6 @@
 			src={iframeSrc}
 			title="Preview"
 			class="h-full w-full border-0"
-			sandbox="allow-scripts allow-same-origin"
 			onload={onIframeLoad}
 		></iframe>
 	</div>
