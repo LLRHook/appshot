@@ -4,6 +4,7 @@
 	import { DEVICE_SIZES, type DeviceSize } from '$lib/templates';
 	import { DEFAULT_CONFIG, configToParams, type ComposableConfig } from '$lib/layers';
 	import { getPresetConfig } from '$lib/presets';
+	import { loadEditorState, saveEditorState, clearSavedState, compressScreenshots } from '$lib/persistence';
 	import LayerSidebar from '$lib/components/LayerSidebar.svelte';
 	import LivePreview from '$lib/components/LivePreview.svelte';
 	import DeviceTabs from '$lib/components/DeviceTabs.svelte';
@@ -22,6 +23,7 @@
 	let selectedDevice: DeviceSize = $state(DEVICE_SIZES[0]);
 	let screenshots: string[] = $state([]);
 	let currentSlide = $state(0);
+	let saveStatus: 'idle' | 'saved' | 'quota-warning' = $state('idle');
 
 	// Determine layout mode
 	const isDuo = $derived(config.layout.type === 'duo-side-by-side' || config.layout.type === 'duo-overlap');
@@ -59,7 +61,7 @@
 		return p;
 	});
 
-	// Initialize from preset
+	// Load priority: preset param > localStorage > defaults
 	$effect(() => {
 		const pId = presetId;
 		if (pId) {
@@ -67,7 +69,40 @@
 			if (presetConfig) {
 				config = structuredClone(presetConfig);
 			}
+		} else {
+			const saved = loadEditorState();
+			if (saved) {
+				config = saved.config;
+				screenshots = saved.screenshots;
+				currentSlide = saved.currentSlide;
+				const match = DEVICE_SIZES.find(d => d.label === saved.selectedDeviceLabel);
+				if (match) selectedDevice = match;
+			}
 		}
+	});
+
+	// Auto-save to localStorage (debounced)
+	let saveTimer: ReturnType<typeof setTimeout>;
+	$effect(() => {
+		// Touch reactive dependencies for Svelte tracking
+		void JSON.stringify(config);
+		void screenshots.length;
+		void selectedDevice.label;
+		void currentSlide;
+
+		clearTimeout(saveTimer);
+		saveTimer = setTimeout(async () => {
+			const compressed = await compressScreenshots(untrack(() => screenshots));
+			const result = saveEditorState({
+				config: untrack(() => config),
+				screenshots: compressed,
+				selectedDeviceLabel: untrack(() => selectedDevice.label),
+				currentSlide: untrack(() => currentSlide),
+			});
+			saveStatus = result;
+		}, 500);
+
+		return () => clearTimeout(saveTimer);
 	});
 
 	// Sync device type in config when device tab changes
@@ -156,6 +191,16 @@
 		matchedStyle = null;
 	}
 
+	function resetEditor() {
+		if (!confirm('Reset editor to defaults? This will clear your saved state and screenshots.')) return;
+		clearSavedState();
+		config = structuredClone(DEFAULT_CONFIG);
+		screenshots = [];
+		currentSlide = 0;
+		selectedDevice = DEVICE_SIZES[0];
+		saveStatus = 'idle';
+	}
+
 	const presetName = $derived.by(() => {
 		if (!presetId) return 'Custom';
 		const preset = getPresetConfig(presetId);
@@ -170,6 +215,18 @@
 			<div class="flex items-center justify-between">
 				<a href="/" class="text-sm text-gray-500 hover:text-gray-700">&larr; Back</a>
 				<div class="flex items-center gap-2">
+					{#if saveStatus === 'saved'}
+						<span class="text-xs text-gray-400">Saved</span>
+					{:else if saveStatus === 'quota-warning'}
+						<span class="text-xs text-amber-500" title="Screenshots too large to save">Saved (no images)</span>
+					{/if}
+					<button
+						onclick={resetEditor}
+						class="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-600 transition hover:bg-gray-50"
+						title="Reset to defaults"
+					>
+						Reset
+					</button>
 					<button
 						onclick={() => showStyleMatch = true}
 						class="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-600 transition hover:bg-gray-50"
