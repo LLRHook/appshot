@@ -1,4 +1,4 @@
-import { DEFAULT_CONFIG, type ComposableConfig } from './layers';
+import { DEFAULT_CONFIG, type ComposableConfig, type BackgroundConfig, type DeviceFrameConfig, type TypographyConfig, type EffectsConfig, type PerspectiveConfig, type LayoutConfig } from './layers';
 
 const STORAGE_KEY = 'appshot:editor-state';
 
@@ -41,7 +41,17 @@ export function loadEditorState(): SavedState | null {
 		const parsed = JSON.parse(raw);
 		if (!parsed || parsed.version !== 1 || !parsed.config) return null;
 
-		return parsed as SavedState;
+		// Deep merge with defaults to handle new fields added after save
+		const config: ComposableConfig = {
+			background: { ...DEFAULT_CONFIG.background, ...parsed.config.background } as BackgroundConfig,
+			device: { ...DEFAULT_CONFIG.device, ...parsed.config.device } as DeviceFrameConfig,
+			layout: { ...DEFAULT_CONFIG.layout, ...parsed.config.layout } as LayoutConfig,
+			typography: { ...DEFAULT_CONFIG.typography, ...parsed.config.typography } as TypographyConfig,
+			effects: { ...DEFAULT_CONFIG.effects, ...parsed.config.effects } as EffectsConfig,
+			perspective: { ...DEFAULT_CONFIG.perspective, ...parsed.config.perspective } as PerspectiveConfig,
+		};
+
+		return { ...parsed, config } as SavedState;
 	} catch {
 		return null;
 	}

@@ -23,7 +23,7 @@ const BG_DEFAULTS = {
 };
 
 const DEVICE_DEFAULTS = {
-	frameColor: '#1a1a1a',
+	frameColor: '',
 	frameThickness: 50,
 	frameBorderRadius: 50,
 	screenBorderRadius: 50,
@@ -33,7 +33,7 @@ const DEVICE_DEFAULTS = {
 const TYPO_DEFAULTS = {
 	fontFamily: '',
 	fontSize: 100,
-	textAlign: 'center' as const,
+	textAlign: '' as const,
 	textShadow: false,
 	textShadowColor: '#000000',
 	textShadowBlur: 4,
@@ -51,7 +51,7 @@ const FX_DEFAULTS = {
 	glowColor: '#FFFFFF',
 	glowIntensity: 30,
 	glowRadius: 100,
-	noiseIntensity: 35,
+	noiseIntensity: 0,
 	backgroundBlur: 0,
 };
 

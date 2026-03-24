@@ -33,6 +33,7 @@
 	];
 
 	const alignments: { value: TypographyConfig['textAlign']; label: string }[] = [
+		{ value: '', label: 'Auto' },
 		{ value: 'left', label: 'Left' },
 		{ value: 'center', label: 'Center' },
 		{ value: 'right', label: 'Right' },

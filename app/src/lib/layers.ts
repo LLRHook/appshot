@@ -65,7 +65,7 @@ export interface TypographyConfig {
 	fontWeight: number; // 400, 500, 600, 700, 800
 	fontFamily: string; // font family name (e.g., 'Inter', 'SF Pro Display')
 	fontSize: number; // 50-200 (percentage of default, 100 = auto)
-	textAlign: 'left' | 'center' | 'right';
+	textAlign: '' | 'left' | 'center' | 'right';
 	textShadow: boolean;
 	textShadowColor: string;
 	textShadowBlur: number; // 0-20 (px)
@@ -152,7 +152,7 @@ export const DEFAULT_CONFIG: ComposableConfig = {
 		style: 'bezel',
 		device: 'iphone',
 		clayColor: '#E8DED5',
-		frameColor: '#1a1a1a',
+		frameColor: '',
 		frameThickness: 50,
 		frameBorderRadius: 50,
 		screenBorderRadius: 50,
@@ -170,7 +170,7 @@ export const DEFAULT_CONFIG: ComposableConfig = {
 		fontWeight: 700,
 		fontFamily: '',
 		fontSize: 100,
-		textAlign: 'center',
+		textAlign: '',
 		textShadow: false,
 		textShadowColor: '#000000',
 		textShadowBlur: 4,
@@ -190,7 +190,7 @@ export const DEFAULT_CONFIG: ComposableConfig = {
 		glowColor: '#FFFFFF',
 		glowIntensity: 30,
 		glowRadius: 100,
-		noiseIntensity: 35,
+		noiseIntensity: 0,
 		backgroundBlur: 0,
 	},
 	perspective: {

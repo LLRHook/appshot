@@ -22,6 +22,11 @@
 	let showFrameColor = $derived(config.style !== 'none');
 	let showThickness = $derived(config.style !== 'none' && config.style !== 'wireframe');
 	let showRadiusControls = $derived(config.style !== 'none');
+
+	// Effective frame color for display (empty = use style default)
+	const effectiveFrameColor = $derived(
+		config.frameColor || (config.style === 'clay' ? config.clayColor : '#1a1a1a')
+	);
 </script>
 
 <div class="space-y-4">
@@ -34,9 +39,9 @@
 					class="rounded-lg border px-2.5 py-2 text-left transition {config.style === style.value ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:bg-gray-50'}"
 					onclick={() => {
 						const update: Partial<DeviceFrameConfig> = { style: style.value };
-						// Sync clayColor when switching to clay
+						// Sync frameColor from clayColor when switching to clay
 						if (style.value === 'clay') {
-							update.clayColor = config.frameColor;
+							update.frameColor = config.clayColor;
 						}
 						config = { ...config, ...update };
 					}}
@@ -70,7 +75,7 @@
 			<div class="flex items-center gap-2">
 				<input
 					type="color"
-					value={config.frameColor}
+					value={effectiveFrameColor}
 					oninput={(e) => {
 						const color = (e.target as HTMLInputElement).value;
 						const update: Partial<DeviceFrameConfig> = { frameColor: color };
@@ -81,7 +86,7 @@
 				/>
 				<input
 					type="text"
-					value={config.frameColor}
+					value={effectiveFrameColor}
 					oninput={(e) => {
 						const color = (e.target as HTMLInputElement).value;
 						const update: Partial<DeviceFrameConfig> = { frameColor: color };
