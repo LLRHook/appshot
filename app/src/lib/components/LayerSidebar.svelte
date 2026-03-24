@@ -51,6 +51,7 @@
 			const data = await res.json();
 			if (data.background) {
 				const bg: BackgroundConfig = {
+					...config.background,
 					type: data.background.type || config.background.type,
 					color1: data.background.color1 || config.background.color1,
 					color2: data.background.color2 || config.background.color2,
