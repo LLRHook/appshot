@@ -58,6 +58,11 @@
 			if (screenshots[currentSlide]) p.src = screenshots[currentSlide];
 		}
 
+		// Background image sent via postMessage (data URL too large for URL params)
+		if (config.background.imageUrl) {
+			p.bg_image = config.background.imageUrl;
+		}
+
 		return p;
 	});
 
