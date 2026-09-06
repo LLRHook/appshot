@@ -1,3 +1,4 @@
+import type { StyleId } from './studio';
 import type { DeviceId } from './devices';
 
 export type FrameStyle = 'bezel' | 'clay' | 'wireframe' | 'none';
@@ -43,6 +44,11 @@ export interface SlideContinuity {
 }
 
 export interface Slide {
+	label?: string;
+	tilt?: number;
+	scale?: number;
+	badge?: string;
+	fontScale?: number;
 	id: string;
 	device: DeviceId;
 	background: Background;
@@ -54,7 +60,20 @@ export interface Slide {
 	continuity: SlideContinuity;
 }
 
+export interface Panorama {
+	leftId: string;
+	rightId: string;
+	image: ImageRef;
+	offset: number;
+	scale: number;
+	tilt: number;
+}
+
 export interface Composition {
+	name: string;
+	style: StyleId;
+	accent: string;
+	panorama?: Panorama;
 	version: 1;
 	device: DeviceId;
 	slides: Slide[];
