@@ -148,3 +148,169 @@ test('a slow earlier screenshot cannot overwrite the latest preview', async ({ p
 	});
 	expect(matchesLatest).toEqual({ differences: 0, maxDelta: 0 });
 });
+
+test('Linen rejects clipped copy, a phone outside the seam, and false image dimensions', async ({
+	page
+}) => {
+	const failures = await page.evaluate(async () => {
+		const { createDemo, tableLinenFromManifest, renderSlide } = window.AppshotRendererTests;
+		const image = createDemo().slides[0].primaryImage!;
+		const baseline = tableLinenFromManifest(
+			{
+				version: 1,
+				name: 'Linen',
+				style: 'table-linen',
+				slides: ['left', 'right'].map((id) => ({
+					id,
+					image: 'capture',
+					theme: 'teal',
+					headline: ['One bill.', '*Fair shares.*'],
+					subtitle: ['Every detail.']
+				})),
+				panorama: { enabled: true, leftId: 'left', rightId: 'right', image: 'capture' }
+			},
+			{ capture: image }
+		);
+		const canvas = document.createElement('canvas');
+		await renderSlide(canvas, baseline, 0);
+		const blankRows = structuredClone(baseline);
+		blankRows.slides[0].typography.headline = 'One bill.\n\n*Fair shares.*';
+		blankRows.slides[0].linen!.layout.headlineLeading = 70;
+		blankRows.slides[0].typography.subtitle = 'First row.\n\nSecond row.';
+		blankRows.slides[0].linen!.layout.subtitleTop = 560;
+		blankRows.slides[0].linen!.layout.subtitleLeading = 28;
+		await renderSlide(canvas, blankRows, 0);
+		const cases: [string, (project: typeof baseline) => void][] = [
+			[
+				'empty supporting text',
+				(p) => {
+					p.slides[0].typography.subtitle = '';
+					p.slides[0].linen!.layout.headlineTop = 700;
+				}
+			],
+			[
+				'text outside panel',
+				(p) => {
+					p.slides[0].linen!.layout.margin = 1310;
+				}
+			],
+			[
+				'wordmark outside panel',
+				(p) => {
+					p.name = 'W'.repeat(200);
+				}
+			],
+			[
+				'overlapping headline lines',
+				(p) => {
+					p.slides[0].linen!.layout.headlineLeading = 1;
+				}
+			],
+			[
+				'overlapping supporting lines',
+				(p) => {
+					p.slides[0].typography.subtitle = 'First line.\nSecond line.';
+					p.slides[0].linen!.layout.subtitleLeading = 1;
+				}
+			],
+			[
+				'phone outside seam',
+				(p) => {
+					p.panorama!.linenPhone!.centerX = 660;
+				}
+			],
+			[
+				'incorrect image dimensions',
+				(p) => {
+					p.panorama!.image.naturalWidth = 1234;
+				}
+			],
+			[
+				'alternate aspect collision',
+				(p) => {
+					p.device = 'ipad-13';
+					p.slides.forEach((s) => {
+						s.device = 'ipad-13';
+					});
+				}
+			]
+		];
+		const failures = [];
+		for (const [name, modify] of cases) {
+			const copy = structuredClone(baseline);
+			modify(copy);
+			try {
+				await renderSlide(canvas, copy, 0);
+				failures.push({ name, rejected: false, message: '' });
+			} catch (error) {
+				failures.push({ name, rejected: true, message: String(error) });
+			}
+		}
+		canvas.width = 0;
+		return failures;
+	});
+	for (const failure of failures) {
+		expect(failure.rejected, failure.name).toBe(true);
+		expect(failure.message.length, failure.name).toBeGreaterThan(10);
+	}
+});
+
+test('iPhone hardware adds a missing island and preserves an existing island without duplication', async ({
+	page
+}) => {
+	const result = await page.evaluate(async () => {
+		const { tableLinenFromManifest, renderSlide } = window.AppshotRendererTests;
+		const capture = document.createElement('canvas');
+		capture.width = 1320;
+		capture.height = 2868;
+		const ctx = capture.getContext('2d')!;
+		ctx.fillStyle = '#ffffff';
+		ctx.fillRect(0, 0, 1320, 2868);
+		const image = {
+			id: 'island-fixture',
+			blobUrl: capture.toDataURL(),
+			naturalWidth: 1320,
+			naturalHeight: 2868
+		};
+		const project = tableLinenFromManifest(
+			{
+				version: 1,
+				name: 'Hardware',
+				style: 'table-linen',
+				phone: { hardware: 'iphone-17-pro-max', dynamicIsland: 'source', hardwareButtons: true },
+				slides: [
+					{ id: 'one', image: 'capture', theme: 'teal', headline: ['One phone.'], subtitle: [] }
+				]
+			},
+			{ capture: image }
+		);
+		async function pixels(mode: 'draw' | 'source') {
+			project.slides[0].linen!.phone.dynamicIsland = mode;
+			const canvas = document.createElement('canvas');
+			await renderSlide(canvas, project, 0);
+			const pixels = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+			canvas.width = 0;
+			return pixels;
+		}
+		function differences(a: Uint8ClampedArray, b: Uint8ClampedArray) {
+			let count = 0;
+			for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) count++;
+			return count;
+		}
+		const blankSource = await pixels('source');
+		const addedIsland = await pixels('draw');
+		ctx.fillStyle = '#000000';
+		ctx.beginPath();
+		ctx.roundRect(472, 42, 376, 110, 55);
+		ctx.fill();
+		project.slides[0].primaryImage!.blobUrl = capture.toDataURL();
+		const existingSource = await pixels('source');
+		const guardedDraw = await pixels('draw');
+		return {
+			added: differences(blankSource, addedIsland),
+			duplicated: differences(existingSource, guardedDraw)
+		};
+	});
+	expect(result.added).toBeGreaterThan(0);
+	expect(result.duplicated).toBe(0);
+});

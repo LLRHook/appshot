@@ -14,6 +14,24 @@
 	} from '$lib/model/studio';
 	import type { Composition, Slide, ImageRef } from '$lib/model/types';
 	import {
+		LINEN_LAYOUT_BOUNDS,
+		LINEN_PALETTES,
+		LINEN_PHONE_BOUNDS,
+		LINEN_REFERENCE,
+		LINEN_SHARED_PHONE,
+		defaultLinenSettings,
+		defaultLinenTheme,
+		linenDefaultsForSlide,
+		linenThemeOf,
+		resolveLinenSettings,
+		resolveSharedLinenPhone,
+		type LinenColorKey,
+		type LinenLayout,
+		type LinenPhone,
+		type LinenSettings,
+		type LinenTheme
+	} from '$lib/model/linen';
+	import {
 		loadProject,
 		saveProject,
 		parseProject,
@@ -66,6 +84,51 @@
 		).values()
 	]);
 	const displayedImage = $derived(isLinked ? project.panorama?.image : slide.primaryImage);
+	const isLinen = $derived(project.style === 'table-linen');
+	const linen = $derived(resolveLinenSettings(project, selected));
+	const linenPhone = $derived(isLinked ? resolveSharedLinenPhone(project) : linen.phone);
+	const linenTheme = $derived(linenThemeOf(linen.colors));
+	/** The renderer paints a connected pair's phone with the LEFT frame's hardware palette. */
+	const HARDWARE_COLOR_KEYS: readonly LinenColorKey[] = ['shell', 'shellEdge', 'shadow'];
+	const hardwareIndex = $derived(
+		isLinked && project.panorama
+			? Math.max(
+					0,
+					project.slides.findIndex((s) => s.id === project.panorama!.leftId)
+				)
+			: selected
+	);
+	const hardwareColors = $derived(resolveLinenSettings(project, hardwareIndex).colors);
+	const linenColorValue = (key: LinenColorKey) =>
+		HARDWARE_COLOR_KEYS.includes(key) ? hardwareColors[key] : linen.colors[key];
+	const LINEN_LAYOUT_FIELDS: { key: keyof LinenLayout; label: string; step: number }[] = [
+		{ key: 'margin', label: 'Left margin', step: 1 },
+		{ key: 'wordmarkTop', label: 'Wordmark top', step: 1 },
+		{ key: 'headlineTop', label: 'Headline top', step: 1 },
+		{ key: 'headlineWidth', label: 'Headline width', step: 1 },
+		{ key: 'headlineSize', label: 'Headline size', step: 1 },
+		{ key: 'headlineLeading', label: 'Headline leading', step: 1 },
+		{ key: 'headlineTracking', label: 'Headline tracking', step: 0.01 },
+		{ key: 'subtitleTop', label: 'Supporting top', step: 1 },
+		{ key: 'subtitleWidth', label: 'Supporting width', step: 1 },
+		{ key: 'subtitleSize', label: 'Supporting size', step: 1 },
+		{ key: 'subtitleLeading', label: 'Supporting leading', step: 1 },
+		{ key: 'bandTop', label: 'Band top', step: 1 }
+	];
+	const LINEN_PALETTE_FIELDS: { key: LinenColorKey; label: string }[] = [
+		{ key: 'canvas', label: 'Canvas' },
+		{ key: 'band', label: 'Band' },
+		{ key: 'headline', label: 'Headline' },
+		{ key: 'accent', label: 'Italic accent' },
+		{ key: 'subtitle', label: 'Supporting' }
+	];
+	const LINEN_ADVANCED_PALETTE: { key: LinenColorKey; label: string }[] = [
+		{ key: 'wordmark', label: 'Wordmark' },
+		{ key: 'dot', label: 'Gold dot' },
+		{ key: 'shell', label: 'Phone shell' },
+		{ key: 'shellEdge', label: 'Shell edge' },
+		{ key: 'shadow', label: 'Shadow' }
+	];
 	const allHaveImages = $derived(
 		project.slides.every(
 			(s) =>
@@ -160,6 +223,92 @@
 	function typography(key: 'headline' | 'subtitle' | 'fontColor', value: string) {
 		patchSlide({ typography: { ...slide.typography, [key]: value } });
 	}
+	const bounded = (value: number, [min, max]: readonly [number, number]) =>
+		Math.max(min, Math.min(max, value));
+	/** Table Linen text and colors stay per frame; only the phone is shared across a pair. */
+	function patchLinen(patch: Partial<LinenSettings>) {
+		patchSlide({ linen: { ...linen, ...patch } });
+	}
+	function patchLinenAt(index: number, patch: Partial<LinenSettings>) {
+		const current = resolveLinenSettings(project, index);
+		commit({
+			...project,
+			slides: project.slides.map((s, i) =>
+				i === index ? { ...s, linen: { ...current, ...patch } } : s
+			)
+		});
+	}
+	/** Shell, shell edge and shadow edit the pair's shared (left) palette from either half. */
+	function linenColor(key: LinenColorKey, value: string) {
+		if (!/^#[0-9a-f]{6}$/i.test(value)) return;
+		if (HARDWARE_COLOR_KEYS.includes(key)) {
+			patchLinenAt(hardwareIndex, { colors: { ...hardwareColors, [key]: value } });
+			return;
+		}
+		const colors = { ...linen.colors };
+		colors[key] = value;
+		patchLinen({ colors });
+	}
+	function linenShadowOpacity(value: number) {
+		if (!Number.isFinite(value)) return;
+		patchLinenAt(hardwareIndex, {
+			colors: { ...hardwareColors, shadowOpacity: bounded(value, [0, 1]) }
+		});
+	}
+	function applyLinenTheme(theme: LinenTheme) {
+		patchLinen({ colors: { ...LINEN_PALETTES[theme] } });
+	}
+	function linenLayout(key: keyof LinenLayout, value: number) {
+		if (!Number.isFinite(value)) return;
+		const layout = { ...linen.layout };
+		layout[key] = bounded(value, LINEN_LAYOUT_BOUNDS[key]);
+		patchLinen({ layout });
+	}
+	/** On a connected pair every phone edit updates the shared panorama phone. */
+	function patchLinenPhone(patch: Partial<LinenPhone>) {
+		// An explicit undefined removes an optional key (hardware fields) instead of storing it.
+		const merged: Record<string, unknown> = { ...linenPhone, ...patch };
+		for (const key of Object.keys(merged)) if (merged[key] === undefined) delete merged[key];
+		const next = merged as unknown as LinenPhone;
+		if (next.top >= next.bottom) {
+			error = 'The phone top must stay above the phone bottom.';
+			return;
+		}
+		if (next.mode === 'bottom-crop' && !next.cropReason?.trim())
+			next.cropReason = 'Intentional bottom crop';
+		if (isLinked && project.panorama)
+			commit({ ...project, panorama: { ...project.panorama, linenPhone: next } });
+		else patchLinen({ phone: next });
+	}
+	/** Frame preset: the V1 generic shell, or the calibrated iPhone 17 Pro Max illustration. */
+	function linenHardware(value: string) {
+		if (value === 'iphone-17-pro-max')
+			patchLinenPhone({
+				hardware: 'iphone-17-pro-max',
+				dynamicIsland: linenPhone.dynamicIsland ?? 'source',
+				hardwareButtons: linenPhone.hardwareButtons ?? true
+			});
+		else
+			patchLinenPhone({
+				hardware: undefined,
+				dynamicIsland: undefined,
+				hardwareButtons: undefined
+			});
+	}
+	function linenPhoneNumber(key: keyof typeof LINEN_PHONE_BOUNDS, value: number) {
+		if (!Number.isFinite(value)) return;
+		const next = { ...linenPhone };
+		next[key] = bounded(value, LINEN_PHONE_BOUNDS[key]);
+		patchLinenPhone(next);
+	}
+	function freshSlide(index: number, image?: ImageRef): Slide {
+		const next = {
+			...createSlide(index, image),
+			device: project.device,
+			typography: { ...createSlide(0).typography, fontColor: direction.foreground }
+		};
+		return isLinen ? { ...next, linen: defaultLinenSettings('cream') } : next;
+	}
 	function undo() {
 		if (!history.length) return;
 		future = [...future, $state.snapshot(project)];
@@ -188,6 +337,42 @@
 	}
 	function chooseStyle(id: StyleId) {
 		const style = getStyle(id);
+		if (id === 'table-linen') {
+			// Keep every raw screenshot and all copy. Slides that never had Table Linen
+			// settings get teal/cream defaults; earlier Table Linen edits are preserved.
+			const leftIndex =
+				project.continuityMode === 'paired' && project.panorama
+					? project.slides.findIndex((s) => s.id === project.panorama!.leftId)
+					: -1;
+			const pair = leftIndex >= 0 ? [leftIndex, leftIndex + 1] : [];
+			commit({
+				...project,
+				style: id,
+				accent: style.accent,
+				slides: project.slides.map((s, i) => {
+					const settings =
+						s.linen ?? linenDefaultsForSlide(s, defaultLinenTheme(i, project.slides.length, pair));
+					return {
+						...s,
+						linen: settings,
+						background: { kind: 'solid', colors: [settings.colors.canvas] },
+						typography: { ...s.typography, fontColor: settings.colors.headline }
+					};
+				}),
+				...(project.panorama
+					? {
+							panorama: {
+								...project.panorama,
+								offset: 0,
+								scale: 1,
+								tilt: 0,
+								linenPhone: project.panorama.linenPhone ?? { ...LINEN_SHARED_PHONE }
+							}
+						}
+					: {})
+			});
+			return;
+		}
 		commit({
 			...project,
 			style: id,
@@ -225,11 +410,7 @@
 	}
 	function addSlide() {
 		if (project.slides.length >= 10) return;
-		const next = {
-			...createSlide(project.slides.length),
-			device: project.device,
-			typography: { ...createSlide(0).typography, fontColor: direction.foreground }
-		};
+		const next = freshSlide(project.slides.length);
 		commit({ ...project, slides: [...project.slides, next] });
 		selected = project.slides.length - 1;
 		activeTab = 'assets';
@@ -259,7 +440,15 @@
 					: s
 			),
 			continuityMode: 'paired',
-			panorama: { leftId: slide.id, rightId: next.id, image, offset: 0, scale: 1, tilt: -14 }
+			panorama: {
+				leftId: slide.id,
+				rightId: next.id,
+				image,
+				offset: 0,
+				scale: 1,
+				tilt: isLinen ? 0 : -14,
+				...(isLinen ? { linenPhone: { ...linen.phone, centerX: LINEN_REFERENCE.width } } : {})
+			}
 		});
 	}
 	function panorama(key: 'offset' | 'scale' | 'tilt', value: number) {
@@ -301,12 +490,7 @@
 				const slides = [...project.slides];
 				images.slice(0, count).forEach((image, i) => {
 					if (empty && i === 0) slides[selected] = { ...slide, primaryImage: image };
-					else
-						slides.push({
-							...createSlide(slides.length, image),
-							device: project.device,
-							typography: { ...createSlide(0).typography, fontColor: direction.foreground }
-						});
+					else slides.push(freshSlide(slides.length, image));
 				});
 				commit({ ...project, slides });
 				notify(
@@ -390,6 +574,51 @@
 		};
 	}
 </script>
+
+{#snippet numberField(
+	id: string,
+	label: string,
+	value: number,
+	bounds: readonly [number, number],
+	step: number,
+	apply: (value: number) => void
+)}
+	<label class="num-field" for={id}
+		>{label}<input
+			{id}
+			type="number"
+			min={bounds[0]}
+			max={bounds[1]}
+			{step}
+			{value}
+			onchange={(event) => apply(Number(event.currentTarget.value))}
+		/></label
+	>
+{/snippet}
+{#snippet colorField(key: LinenColorKey, label: string)}
+	<label class="color-field"
+		>{label}<span
+			><input
+				type="color"
+				aria-label={`${label} color`}
+				value={linenColorValue(key)}
+				oninput={(event) => linenColor(key, event.currentTarget.value)}
+			/><code>{linenColorValue(key)}</code></span
+		></label
+	>
+{/snippet}
+{#snippet toggleRow(id: string, label: string, on: boolean, flip: () => void)}
+	<div class="toggle-row">
+		<span {id}>{label}</span><button
+			class="switch"
+			class:on
+			role="switch"
+			aria-checked={on}
+			aria-labelledby={id}
+			onclick={flip}><span></span></button
+		>
+	</div>
+{/snippet}
 
 <svelte:head
 	><title>Appshot — Screenshot Studio</title><meta
@@ -496,25 +725,29 @@
 							>
 								<div
 									class="style-type"
-									class:serif={style.id === 'paper'}
+									class:serif={style.id === 'paper' || style.id === 'table-linen'}
 									class:mono={style.id === 'terminal'}
 								>
 									<span
 										>{style.id === 'paper'
 											? 'A story'
-											: style.id === 'midnight'
-												? 'Less, but'
-												: style.id === 'sorbet'
-													? 'Oh,'
-													: 'Make it'}</span
+											: style.id === 'table-linen'
+												? 'Dinner for four.'
+												: style.id === 'midnight'
+													? 'Less, but'
+													: style.id === 'sorbet'
+														? 'Oh,'
+														: 'Make it'}</span
 									><span
 										>{style.id === 'paper'
 											? 'worth telling.'
-											: style.id === 'midnight'
-												? 'better.'
-												: style.id === 'sorbet'
-													? 'hello.'
-													: 'memorable.'}</span
+											: style.id === 'table-linen'
+												? 'One shared bill.'
+												: style.id === 'midnight'
+													? 'better.'
+													: style.id === 'sorbet'
+														? 'hello.'
+														: 'memorable.'}</span
 									>
 								</div>
 								<div class="style-orbit" style:border-color={style.accent}></div>
@@ -730,61 +963,142 @@
 		</div>
 		<div class="inspector-scroll">
 			{#if inspectorTab === 'content'}
-				<section class="control-section">
-					<label class="field-label" for="headline"
-						>Headline<span>{slide.typography.headline.length}/100</span></label
-					><textarea
-						id="headline"
-						class="headline-input"
-						maxlength="100"
-						rows="3"
-						value={slide.typography.headline}
-						oninput={(event) => typography('headline', event.currentTarget.value)}
-					></textarea><label class="field-label" for="subtitle">Supporting text</label><textarea
-						id="subtitle"
-						rows="3"
-						maxlength="220"
-						value={slide.typography.subtitle ?? ''}
-						oninput={(event) => typography('subtitle', event.currentTarget.value)}
-					></textarea><label class="field-label" for="badge">Eyebrow / caption</label><input
-						id="badge"
-						value={slide.badge ?? ''}
-						maxlength="60"
-						oninput={(event) => patchSlide({ badge: event.currentTarget.value })}
-					/>
-					<div class="color-row">
-						<label class="color-field"
-							>Text color<span
-								><input
-									type="color"
-									aria-label="Text color"
-									value={slide.typography.fontColor}
-									oninput={(event) => typography('fontColor', event.currentTarget.value)}
-								/><code>{slide.typography.fontColor}</code></span
-							></label
-						><label class="color-field"
-							>Set accent<span
-								><input
-									type="color"
-									aria-label="Campaign accent"
-									value={project.accent}
-									oninput={(event) => commit({ ...project, accent: event.currentTarget.value })}
-								/><code>{project.accent}</code></span
-							></label
-						>
-					</div>
-					<label class="field-label" for="text-size"
-						>Type size<span>{Math.round((slide.fontScale ?? 1) * 100)}%</span></label
-					><input
-						id="text-size"
-						type="range"
-						min="0.7"
-						max="1.3"
-						step="0.05"
-						value={slide.fontScale ?? 1}
-						oninput={(event) => patchSlide({ fontScale: Number(event.currentTarget.value) })}
-					/>
-				</section>
+				{#if isLinen}
+					<section class="control-section">
+						<label class="field-label" for="headline"
+							>Headline<span>{slide.typography.headline.length}/180</span></label
+						><textarea
+							id="headline"
+							class="headline-input linen-headline"
+							maxlength="180"
+							rows="3"
+							value={slide.typography.headline}
+							oninput={(event) => typography('headline', event.currentTarget.value)}
+						></textarea>
+						<p class="field-help">
+							<Icon name="info" size={12} />Each row is one line. Wrap accent words in asterisks,
+							like *fair shares*, to set them in serif italic in the accent color.
+						</p>
+						<label class="field-label" for="subtitle"
+							>Supporting text<span>{(slide.typography.subtitle ?? '').length}/300</span></label
+						><textarea
+							id="subtitle"
+							rows="3"
+							maxlength="300"
+							value={slide.typography.subtitle ?? ''}
+							oninput={(event) => typography('subtitle', event.currentTarget.value)}
+						></textarea>
+						<p class="field-help">Each row is drawn as its own line under the headline.</p>
+						<div class="field-label">Theme<span>THIS FRAME</span></div>
+						<div class="theme-switch" role="group" aria-label="Table Linen theme">
+							<button
+								class:active={linenTheme === 'teal'}
+								aria-pressed={linenTheme === 'teal'}
+								onclick={() => applyLinenTheme('teal')}
+								><i style:background={LINEN_PALETTES.teal.canvas}></i>Teal</button
+							><button
+								class:active={linenTheme === 'cream'}
+								aria-pressed={linenTheme === 'cream'}
+								onclick={() => applyLinenTheme('cream')}
+								><i style:background={LINEN_PALETTES.cream.canvas}></i>Cream</button
+							>
+						</div>
+						{@render toggleRow('band-label', 'Linen band', linen.band, () =>
+							patchLinen({ band: !linen.band })
+						)}
+						<div class="palette-grid">
+							{#each LINEN_PALETTE_FIELDS as field (field.key)}
+								{@render colorField(field.key, field.label)}
+							{/each}
+						</div>
+						<details class="advanced">
+							<summary>Advanced palette</summary>
+							<div class="palette-grid">
+								{#each LINEN_ADVANCED_PALETTE as field (field.key)}
+									{#if !linenPhone.hardware || (field.key !== 'shell' && field.key !== 'shellEdge')}
+										{@render colorField(field.key, field.label)}
+									{/if}
+								{/each}
+							</div>
+							{#if isLinked}
+								<p class="field-help">
+									{linenPhone.hardware
+										? 'The shadow belongs'
+										: 'Phone shell, shell edge and shadow belong'} to the one shared phone; editing
+									{linenPhone.hardware ? 'it' : 'them'} here changes both frames. Wordmark and dot stay
+									per frame.
+								</p>
+							{/if}
+							<label class="field-label" for="shadow-opacity"
+								>Shadow opacity<span>{Math.round(hardwareColors.shadowOpacity * 100)}%</span></label
+							><input
+								id="shadow-opacity"
+								type="range"
+								min="0"
+								max="1"
+								step="0.01"
+								value={hardwareColors.shadowOpacity}
+								oninput={(event) => linenShadowOpacity(Number(event.currentTarget.value))}
+							/>
+						</details>
+					</section>
+				{:else}
+					<section class="control-section">
+						<label class="field-label" for="headline"
+							>Headline<span>{slide.typography.headline.length}/100</span></label
+						><textarea
+							id="headline"
+							class="headline-input"
+							maxlength="100"
+							rows="3"
+							value={slide.typography.headline}
+							oninput={(event) => typography('headline', event.currentTarget.value)}
+						></textarea><label class="field-label" for="subtitle">Supporting text</label><textarea
+							id="subtitle"
+							rows="3"
+							maxlength="220"
+							value={slide.typography.subtitle ?? ''}
+							oninput={(event) => typography('subtitle', event.currentTarget.value)}
+						></textarea><label class="field-label" for="badge">Eyebrow / caption</label><input
+							id="badge"
+							value={slide.badge ?? ''}
+							maxlength="60"
+							oninput={(event) => patchSlide({ badge: event.currentTarget.value })}
+						/>
+						<div class="color-row">
+							<label class="color-field"
+								>Text color<span
+									><input
+										type="color"
+										aria-label="Text color"
+										value={slide.typography.fontColor}
+										oninput={(event) => typography('fontColor', event.currentTarget.value)}
+									/><code>{slide.typography.fontColor}</code></span
+								></label
+							><label class="color-field"
+								>Set accent<span
+									><input
+										type="color"
+										aria-label="Campaign accent"
+										value={project.accent}
+										oninput={(event) => commit({ ...project, accent: event.currentTarget.value })}
+									/><code>{project.accent}</code></span
+								></label
+							>
+						</div>
+						<label class="field-label" for="text-size"
+							>Type size<span>{Math.round((slide.fontScale ?? 1) * 100)}%</span></label
+						><input
+							id="text-size"
+							type="range"
+							min="0.7"
+							max="1.3"
+							step="0.05"
+							value={slide.fontScale ?? 1}
+							oninput={(event) => patchSlide({ fontScale: Number(event.currentTarget.value) })}
+						/>
+					</section>
+				{/if}
 				<section class="control-section">
 					<div class="field-label">
 						Screenshot<button class="text-link" onclick={() => replaceInput.click()}
@@ -800,6 +1114,153 @@
 							</div>{:else}<Icon name="upload" size={24} /><span>Upload an app screenshot</span
 							>{/if}</button
 					>
+				</section>
+			{:else if isLinen}
+				<section class="control-section">
+					<div class="field-label">
+						Phone{#if isLinked}<span>SHARED ACROSS BOTH FRAMES</span>{/if}
+					</div>
+					<p class="field-help">
+						{isLinked
+							? 'One phone crosses the seam. Center X counts across the 2640-pixel two-frame world; 1320 is the seam.'
+							: 'Positions are 1320 × 2868 reference pixels and scale with the export size.'}
+					</p>
+					<label class="field-label" for="phone-hardware">Frame preset</label><select
+						id="phone-hardware"
+						value={linenPhone.hardware ?? 'simple'}
+						onchange={(event) => linenHardware(event.currentTarget.value)}
+						><option value="simple">Simple frame</option><option value="iphone-17-pro-max"
+							>iPhone 17 Pro Max</option
+						></select
+					>
+					{#if linenPhone.hardware}
+						<label class="field-label" for="phone-island">Dynamic Island</label><select
+							id="phone-island"
+							value={linenPhone.dynamicIsland ?? 'source'}
+							onchange={(event) =>
+								patchLinenPhone({
+									dynamicIsland: event.currentTarget.value as LinenPhone['dynamicIsland']
+								})}
+							><option value="source">Already in the screenshot</option><option value="draw"
+								>Add hardware cutout</option
+							></select
+						>
+						{@render toggleRow(
+							'phone-buttons-label',
+							'Side buttons',
+							linenPhone.hardwareButtons === true,
+							() => patchLinenPhone({ hardwareButtons: !linenPhone.hardwareButtons })
+						)}
+						<p class="field-help">
+							Silver rim, black bezel and 150-pixel display corners calibrated to the iPhone 17 Pro
+							Max simulator. The cutout is only added over a light island area; a screenshot that
+							already shows its island is never doubled.
+						</p>
+					{/if}
+					<div class="num-grid">
+						{@render numberField(
+							'phone-top',
+							'Top',
+							linenPhone.top,
+							LINEN_PHONE_BOUNDS.top,
+							1,
+							(v) => linenPhoneNumber('top', v)
+						)}
+						{@render numberField(
+							'phone-bottom',
+							'Bottom',
+							linenPhone.bottom,
+							LINEN_PHONE_BOUNDS.bottom,
+							1,
+							(v) => linenPhoneNumber('bottom', v)
+						)}
+						{@render numberField(
+							'phone-width',
+							'Max width',
+							linenPhone.maxWidth,
+							LINEN_PHONE_BOUNDS.maxWidth,
+							1,
+							(v) => linenPhoneNumber('maxWidth', v)
+						)}
+						{@render numberField(
+							'phone-center',
+							'Center X',
+							linenPhone.centerX,
+							LINEN_PHONE_BOUNDS.centerX,
+							1,
+							(v) => linenPhoneNumber('centerX', v)
+						)}
+						{@render numberField(
+							'phone-shell',
+							'Shell',
+							linenPhone.shell,
+							LINEN_PHONE_BOUNDS.shell,
+							1,
+							(v) => linenPhoneNumber('shell', v)
+						)}
+						{#if !linenPhone.hardware}
+							{@render numberField(
+								'phone-radius',
+								'Corner radius',
+								linenPhone.radius,
+								LINEN_PHONE_BOUNDS.radius,
+								1,
+								(v) => linenPhoneNumber('radius', v)
+							)}
+						{/if}
+					</div>
+					<label class="field-label" for="phone-rotation"
+						>Rotation<span>{linenPhone.rotation}°</span></label
+					><input
+						id="phone-rotation"
+						type="range"
+						min="-8"
+						max="8"
+						step="0.1"
+						value={linenPhone.rotation}
+						oninput={(event) => linenPhoneNumber('rotation', Number(event.currentTarget.value))}
+					/>
+					{@render toggleRow('frameless-label', 'Frameless screen', linenPhone.frameless, () =>
+						patchLinenPhone({ frameless: !linenPhone.frameless })
+					)}
+					{@render toggleRow('phone-shadow-label', 'Soft shadow', linenPhone.shadow, () =>
+						patchLinenPhone({ shadow: !linenPhone.shadow })
+					)}
+					<label class="field-label" for="phone-mode">Fit</label><select
+						id="phone-mode"
+						value={linenPhone.mode}
+						onchange={(event) =>
+							patchLinenPhone({ mode: event.currentTarget.value as LinenPhone['mode'] })}
+						><option value="full">Whole screenshot between top and bottom</option><option
+							value="bottom-crop">Max width, cropped at the bottom edge</option
+						></select
+					>
+					{#if linenPhone.mode === 'bottom-crop'}
+						<label class="field-label" for="crop-reason">Crop reason</label><input
+							id="crop-reason"
+							maxlength="200"
+							value={linenPhone.cropReason ?? ''}
+							onchange={(event) => patchLinenPhone({ cropReason: event.currentTarget.value })}
+						/>
+						<p class="field-help">An intentional bottom crop is saved with its reason.</p>
+					{/if}
+				</section>
+				<section class="control-section">
+					<details class="advanced">
+						<summary>Type layout<span>REFERENCE PX</span></summary>
+						<div class="num-grid">
+							{#each LINEN_LAYOUT_FIELDS as field (field.key)}
+								{@render numberField(
+									`layout-${field.key}`,
+									field.label,
+									linen.layout[field.key],
+									LINEN_LAYOUT_BOUNDS[field.key],
+									field.step,
+									(v) => linenLayout(field.key, v)
+								)}
+							{/each}
+						</div>
+					</details>
 				</section>
 			{:else}
 				<section class="control-section">
@@ -943,7 +1404,35 @@
 						? 'One device. Two frames. A continuous composition.'
 						: 'Let your device flow into the next screenshot.'}
 				</p>
-				{#if isLinked && project.panorama}<label class="field-label" for="seam-position"
+				{#if isLinked && project.panorama && isLinen}
+					<p class="field-help">
+						The shared phone crosses the seam at 1320 of the two-frame world. Phone edits in the
+						Composition tab apply to both frames.
+					</p>
+					<div class="pair-controls">
+						<label
+							>Center X<input
+								type="number"
+								aria-label="Shared phone center"
+								min={LINEN_PHONE_BOUNDS.centerX[0]}
+								max={LINEN_PHONE_BOUNDS.centerX[1]}
+								value={linenPhone.centerX}
+								onchange={(event) => linenPhoneNumber('centerX', Number(event.currentTarget.value))}
+							/></label
+						><label
+							>Rotation<input
+								type="number"
+								aria-label="Shared phone rotation"
+								min="-8"
+								max="8"
+								step="0.1"
+								value={linenPhone.rotation}
+								onchange={(event) =>
+									linenPhoneNumber('rotation', Number(event.currentTarget.value))}
+							/></label
+						>
+					</div>
+				{:else if isLinked && project.panorama}<label class="field-label" for="seam-position"
 						>Horizontal position<span>{project.panorama.offset}px</span></label
 					><input
 						id="seam-position"

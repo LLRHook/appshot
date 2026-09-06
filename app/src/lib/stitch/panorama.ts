@@ -1,4 +1,5 @@
 import { DEVICES } from '../model/devices';
+import { linenPhoneBox, linenScale, resolveSharedLinenPhone } from '../model/linen';
 import type { Composition } from '../model/types';
 
 export interface PhoneGeometry {
@@ -44,6 +45,30 @@ export function computePanoramaGeometry(
 	)
 		return null;
 	const { width, height } = DEVICES[composition.device];
+	if (composition.style === 'table-linen') {
+		// Table Linen owns explicit reference-pixel geometry; legacy offset/scale/tilt are
+		// not applied so an imported campaign renders exactly as its manifest describes.
+		const box = linenPhoneBox(
+			resolveSharedLinenPhone(composition),
+			panorama.image,
+			linenScale(width, height)
+		);
+		return {
+			leftIndex,
+			rightIndex,
+			panelWidth: width,
+			panelHeight: height,
+			worldWidth: width * 2,
+			viewportX: slideIndex === leftIndex ? 0 : width,
+			phone: {
+				centerX: box.centerX,
+				centerY: box.centerY,
+				width: box.shellWidth,
+				height: box.shellHeight,
+				rotation: box.rotation
+			}
+		};
+	}
 	const leftSlide = composition.slides[leftIndex];
 	const below = leftSlide.layout === 'text-below';
 	const phoneWidth = width * (below ? 0.68 : 0.78) * clamp(finite(panorama.scale, 1), 0.45, 1.8);

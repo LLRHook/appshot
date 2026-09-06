@@ -1,13 +1,13 @@
 import { DEVICES } from './devices';
 import { STYLES } from './studio';
+import { MAX_IMAGE_BYTES, parseImageRef } from './image';
+import { parseLinenPhone, parseLinenSettings } from './linen';
+import { validateProjectSize } from './limits';
 import type { Composition, ImageRef, Slide } from './types';
 
 export const PROJECT_KEY = 'appshot-studio-project-v1';
-const MAX_PROJECT_BYTES = 60 * 1024 * 1024;
-const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
 const INVALID_PROJECT = 'Choose a valid Appshot project with 1–10 screenshots.';
 const INVALID_SLIDE = 'The project contains an invalid screenshot.';
-const INVALID_IMAGE = 'The project contains an invalid image. Use a PNG, JPG, or WebP under 12 MB.';
 
 function record(value: unknown, message = INVALID_SLIDE): Record<string, unknown> {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(message);
@@ -44,46 +44,8 @@ function color(value: unknown): string {
 	return value;
 }
 
-function imageUrl(value: unknown): string {
-	if (typeof value !== 'string') throw new Error(INVALID_IMAGE);
-	if (/^\/demo\/(home|split|receipt|items|share)\.png$/.test(value)) return value;
-	const prefix = /^data:image\/(png|jpeg|webp);base64,/.exec(value);
-	if (!prefix) throw new Error(INVALID_IMAGE);
-	const payload = value.slice(prefix[0].length);
-	// Check the payload without decoding an entire multi-megabyte image or using
-	// a repeated regex group that can exhaust the JS regex stack on large files.
-	const padding = payload.endsWith('==') ? 2 : payload.endsWith('=') ? 1 : 0;
-	if (
-		payload.length < 16 ||
-		payload.length % 4 !== 0 ||
-		(payload.length / 4) * 3 - padding > MAX_IMAGE_BYTES ||
-		/[^A-Za-z0-9+/]/.test(payload.slice(0, payload.length - padding))
-	)
-		throw new Error(INVALID_IMAGE);
-	const header = atob(payload.slice(0, 16));
-	const signatureMatches =
-		prefix[1] === 'png'
-			? header.startsWith('\x89PNG\r\n\x1a\n')
-			: prefix[1] === 'jpeg'
-				? header.startsWith('\xff\xd8\xff')
-				: header.startsWith('RIFF') && header.slice(8, 12) === 'WEBP';
-	if (!signatureMatches) throw new Error(INVALID_IMAGE);
-	return value;
-}
-
-function parseImage(value: unknown): ImageRef {
-	const image = record(value, INVALID_IMAGE);
-	const naturalWidth = number(image.naturalWidth, 1, 8000);
-	const naturalHeight = number(image.naturalHeight, 1, 8000);
-	if (
-		!Number.isInteger(naturalWidth) ||
-		!Number.isInteger(naturalHeight) ||
-		naturalWidth * naturalHeight > 24_000_000
-	) {
-		throw new Error('Choose a screenshot under 24 megapixels, with each side under 8000 pixels.');
-	}
-	return { id: id(image.id), blobUrl: imageUrl(image.blobUrl), naturalWidth, naturalHeight };
-}
+/** Shared with the Table Linen converter; see `image.ts` for the accepted formats. */
+const parseImage = (value: unknown): ImageRef => parseImageRef(value);
 
 function parseSlide(value: unknown, device: Composition['device']): Slide {
 	const slide = record(value);
@@ -137,18 +99,14 @@ function parseSlide(value: unknown, device: Composition['device']): Slide {
 		...(slide.tilt !== undefined ? { tilt: number(slide.tilt, -30, 30) } : {}),
 		...(slide.scale !== undefined ? { scale: number(slide.scale, 0.6, 1.4) } : {}),
 		...(slide.fontScale !== undefined ? { fontScale: number(slide.fontScale, 0.7, 1.3) } : {}),
-		...(slide.badge !== undefined ? { badge: string(slide.badge, 80) } : {})
+		...(slide.badge !== undefined ? { badge: string(slide.badge, 80) } : {}),
+		...(slide.linen !== undefined ? { linen: parseLinenSettings(slide.linen) } : {})
 	};
 }
 
 /** Validate untrusted imports and return only the supported, portable model fields. */
 export function parseProject(text: string): Composition {
-	if (
-		text.length > MAX_PROJECT_BYTES ||
-		new TextEncoder().encode(text).byteLength > MAX_PROJECT_BYTES
-	) {
-		throw new Error('This project is too large. Keep it under 60 MB.');
-	}
+	validateProjectSize(text);
 	let parsed: unknown;
 	try {
 		parsed = JSON.parse(text);
@@ -195,7 +153,10 @@ export function parseProject(text: string): Composition {
 			image: parseImage(panorama.image),
 			offset: number(panorama.offset, -400, 400),
 			scale: number(panorama.scale, 0.6, 1.4),
-			tilt: number(panorama.tilt, -30, 30)
+			tilt: number(panorama.tilt, -30, 30),
+			...(panorama.linenPhone !== undefined
+				? { linenPhone: parseLinenPhone(panorama.linenPhone) }
+				: {})
 		};
 	}
 	return composition;

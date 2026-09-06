@@ -11,20 +11,24 @@
 		node: HTMLCanvasElement,
 		config: { composition: Composition; index: number; width: number }
 	) {
-		let active = true;
+		// The renderer already makes the canvas atomic (latest call wins). The error text
+		// needs the same guard: only the newest update, and never a destroyed one, may set
+		// or clear it, so a superseded render that resolves late cannot hide a newer error.
+		let revision = 0;
 		async function update(value: typeof config) {
+			const current = ++revision;
 			try {
 				await renderSlide(node, value.composition, value.index, { width: value.width });
-				if (active) error = '';
+				if (current === revision) error = '';
 			} catch (e) {
-				if (active) error = e instanceof Error ? e.message : 'Preview unavailable';
+				if (current === revision) error = e instanceof Error ? e.message : 'Preview unavailable';
 			}
 		}
 		void update(config);
 		return {
 			update,
 			destroy() {
-				active = false;
+				revision++;
 			}
 		};
 	}
