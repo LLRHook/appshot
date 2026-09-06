@@ -1,5 +1,6 @@
 import type { StyleId } from './studio';
 import type { DeviceId } from './devices';
+import type { LinenPhone, LinenSettings } from './linen';
 
 export type FrameStyle = 'bezel' | 'clay' | 'wireframe' | 'none';
 export type LayoutId =
@@ -58,6 +59,8 @@ export interface Slide {
 	effects: Effects;
 	primaryImage?: ImageRef;
 	continuity: SlideContinuity;
+	/** Resolved Table Linen settings; ignored by the five original styles. */
+	linen?: LinenSettings;
 }
 
 export interface Panorama {
@@ -67,6 +70,8 @@ export interface Panorama {
 	offset: number;
 	scale: number;
 	tilt: number;
+	/** Table Linen only: the shared phone in 2640×2868 reference world pixels. */
+	linenPhone?: LinenPhone;
 }
 
 export interface Composition {

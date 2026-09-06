@@ -1,7 +1,9 @@
 import { DEVICES } from '../model/devices';
+import { assertDecodedImageMatches } from '../model/image';
 import { getStyle, type StyleId } from '../model/studio';
 import type { Composition, ImageRef, Slide } from '../model/types';
 import { computePanoramaGeometry, type PhoneGeometry } from '../stitch/panorama';
+import { drawLinenScene, loadLinenFonts } from './linen';
 
 type Context = CanvasRenderingContext2D;
 interface RenderOptions {
@@ -13,8 +15,18 @@ let fontsReady: Promise<unknown> | undefined;
 const clamp = (value: number, min: number, max: number) =>
 	Math.max(min, Math.min(max, Number.isFinite(value) ? value : min));
 
-function loadImage(ref?: ImageRef): Promise<HTMLImageElement | undefined> {
-	if (!ref?.blobUrl) return Promise.resolve(undefined);
+/**
+ * Decode (or reuse) the bitmap, then confirm on EVERY call, cache hit or not, that its
+ * real size matches the ImageRef metadata the layout was computed from.
+ */
+async function loadImage(ref?: ImageRef): Promise<HTMLImageElement | undefined> {
+	if (!ref?.blobUrl) return undefined;
+	const image = await decodeImage(ref);
+	assertDecodedImageMatches(image, ref);
+	return image;
+}
+
+function decodeImage(ref: ImageRef): Promise<HTMLImageElement> {
 	const cached = imageCache.get(ref.blobUrl);
 	if (cached) {
 		imageCache.delete(ref.blobUrl);
@@ -47,7 +59,8 @@ async function loadFonts() {
 		document.fonts.load('600 100px "DM Sans"'),
 		document.fonts.load('700 100px "DM Sans"'),
 		document.fonts.load('800 100px "DM Sans"'),
-		document.fonts.load('400 100px "Instrument Serif"')
+		document.fonts.load('400 100px "Instrument Serif"'),
+		document.fonts.load('italic 400 100px "Instrument Serif"')
 	]);
 	await fontsReady;
 }
@@ -637,6 +650,11 @@ async function drawScene(
 	if (wholePair && !panorama) throw new Error('Select a connected pair to render its panorama.');
 	await loadFonts();
 	const source = await loadImage(panorama ? composition.panorama!.image : slide.primaryImage);
+	if (composition.style === 'table-linen') {
+		await loadLinenFonts();
+		drawLinenScene(ctx, composition, slideIndex, panorama, source, wholePair);
+		return;
+	}
 	if (panorama) {
 		const leftSlide = composition.slides[panorama.leftIndex];
 		ctx.save();

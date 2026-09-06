@@ -1,6 +1,6 @@
 import type { Composition, ImageRef, Slide } from './types';
 
-export type StyleId = 'cobalt' | 'paper' | 'midnight' | 'sorbet' | 'terminal';
+export type StyleId = 'cobalt' | 'paper' | 'midnight' | 'sorbet' | 'terminal' | 'table-linen';
 export interface StyleDirection {
 	id: StyleId;
 	name: string;
@@ -55,6 +55,15 @@ export const STYLES: StyleDirection[] = [
 		foreground: '#193E2B',
 		accent: '#EAFE73',
 		swatches: ['#DFE9DD', '#193E2B', '#EAFE73']
+	},
+	{
+		id: 'table-linen',
+		name: 'Table Linen',
+		description: 'Deep teal, warm cream, serif italics. One quiet phone.',
+		background: '#2A736E',
+		foreground: '#FBF6EF',
+		accent: '#D4A843',
+		swatches: ['#2A736E', '#FBF6EF', '#D4A843']
 	}
 ];
 export function getStyle(id: StyleId): StyleDirection {
