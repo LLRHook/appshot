@@ -43,3 +43,9 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Install browser for end-to-end tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser journeys and export continuity
+        run: npm run test:e2e
