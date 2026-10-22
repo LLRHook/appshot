@@ -20,6 +20,15 @@ function baseSlide(id: string): Slide {
 	};
 }
 
+function connectedSlides(): [Slide, Slide] {
+	const left = baseSlide('left');
+	const right = baseSlide('right');
+	const image = makeImage('shared');
+	left.continuity.outgoing = image;
+	right.continuity.incoming = { ...image };
+	return [left, right];
+}
+
 describe('computeSeamGeometry', () => {
 	it('returns null when either side lacks a continuity image', () => {
 		const a = baseSlide('a');
@@ -110,11 +119,11 @@ describe('validateSeamIntegrity', () => {
 	it('rejects slides with mismatched device heights across a seam', () => {
 		const a = baseSlide('a');
 		const b = baseSlide('b');
-		b.device = 'ipad-13';
 		const img = makeImage('img-1', 1320, 1600);
 		a.continuity.outgoing = img;
 		b.continuity.incoming = img;
 		const anchors = computeSeamGeometry(a, b, 0)!;
+		b.device = 'ipad-13';
 		expect(validateSeamIntegrity(anchors, a, b).valid).toBe(false);
 	});
 
@@ -158,4 +167,119 @@ describe('collectSeams', () => {
 		expect(seams).toHaveLength(1);
 		expect(seams[0].leftSlideId).toBe('s2');
 	});
+});
+
+describe('seam input and state regressions', () => {
+	it('keeps fractional placement valid across all output sizes', () => {
+		for (const device of Object.values(DEVICES)) {
+			for (const inset of [0.1, -0.1, 0.3, -0.3, 1 / 3]) {
+				const [left, right] = connectedSlides();
+				left.device = right.device = device.id;
+				left.continuity.inset = right.continuity.inset = inset;
+				const anchors = computeSeamGeometry(left, right, 0)!;
+				expect(anchors.rightX, `${device.id}: ${inset}`).toBe(anchors.leftX - device.width);
+				expect(validateSeamIntegrity(anchors, left, right).valid, `${device.id}: ${inset}`).toBe(
+					true
+				);
+			}
+		}
+	});
+
+	it.each([0, -1, NaN, Infinity, -Infinity, 1.5, Number.MAX_SAFE_INTEGER + 1])(
+		'rejects invalid image pixel dimensions: %s',
+		(value) => {
+			for (const side of ['naturalWidth', 'naturalHeight'] as const) {
+				const [left, right] = connectedSlides();
+				left.continuity.outgoing![side] = right.continuity.incoming![side] = value;
+				expect(computeSeamGeometry(left, right, 0), side).toBeNull();
+				expect(collectSeams([left, right]), side).toEqual([]);
+			}
+		}
+	);
+
+	it.each([Infinity, -Infinity, NaN])('rejects a non-finite inset: %s', (inset) => {
+		const [left, right] = connectedSlides();
+		left.continuity.inset = right.continuity.inset = inset;
+		expect(computeSeamGeometry(left, right, 0)).toBeNull();
+	});
+
+	it.each(['blobUrl', 'naturalWidth', 'naturalHeight'] as const)(
+		'rejects images with the same ID but different %s',
+		(field) => {
+			const [left, right] = connectedSlides();
+			if (field === 'blobUrl') right.continuity.incoming!.blobUrl = 'blob:another-image';
+			else right.continuity.incoming![field] += 1;
+			expect(computeSeamGeometry(left, right, 0)).toBeNull();
+		}
+	);
+
+	it.each(['', '   ', null, 42])('rejects an invalid shared image ID or URL: %s', (value) => {
+		for (const field of ['id', 'blobUrl'] as const) {
+			const [left, right] = connectedSlides();
+			left.continuity.outgoing![field] = right.continuity.incoming![field] = value as string;
+			expect(computeSeamGeometry(left, right, 0), field).toBeNull();
+		}
+	});
+
+	it('rejects a duplicated slide identity', () => {
+		const [left, right] = connectedSlides();
+		right.id = left.id;
+		expect(computeSeamGeometry(left, right, 0)).toBeNull();
+	});
+
+	it('rejects a missing continuity record without throwing', () => {
+		const [left, right] = connectedSlides();
+		left.continuity = undefined as unknown as Slide['continuity'];
+		expect(computeSeamGeometry(left, right, 0)).toBeNull();
+	});
+
+	it('does not collect a seam between incompatible output sizes', () => {
+		const [left, right] = connectedSlides();
+		right.device = 'ipad-13';
+		expect(computeSeamGeometry(left, right, 0)).toBeNull();
+		expect(collectSeams([left, right])).toEqual([]);
+	});
+
+	it.each(['unknown-device', '__proto__', 'constructor'])('rejects unknown device %s', (device) => {
+		const [left, right] = connectedSlides();
+		left.device = device as Slide['device'];
+		expect(() => computeSeamGeometry(left, right, 0)).not.toThrow();
+		expect(computeSeamGeometry(left, right, 0)).toBeNull();
+	});
+
+	it.each([-1, 0.5, NaN, Infinity])('rejects an invalid slide index: %s', (index) => {
+		const [left, right] = connectedSlides();
+		expect(computeSeamGeometry(left, right, index)).toBeNull();
+	});
+
+	it('rejects stale anchors after moving both halves of a shared image', () => {
+		const [left, right] = connectedSlides();
+		const anchors = computeSeamGeometry(left, right, 0)!;
+		left.continuity.inset = right.continuity.inset = 100;
+		expect(validateSeamIntegrity(anchors, left, right).valid).toBe(false);
+	});
+
+	it('rejects stale anchors after resizing the shared image', () => {
+		const [left, right] = connectedSlides();
+		const anchors = computeSeamGeometry(left, right, 0)!;
+		left.continuity.outgoing!.naturalHeight = right.continuity.incoming!.naturalHeight = 1200;
+		expect(validateSeamIntegrity(anchors, left, right).valid).toBe(false);
+	});
+
+	it('rejects anchors for a different ordered pair', () => {
+		const [left, right] = connectedSlides();
+		const anchors = computeSeamGeometry(left, right, 0)!;
+		expect(
+			validateSeamIntegrity({ ...anchors, leftSlideId: 'another-slide' }, left, right).valid
+		).toBe(false);
+	});
+
+	it.each(['imageWidth', 'imageHeight', 'y', 'inset'] as const)(
+		'rejects non-finite anchor %s even when the horizontal invariant holds',
+		(field) => {
+			const [left, right] = connectedSlides();
+			const anchors = computeSeamGeometry(left, right, 0)!;
+			expect(validateSeamIntegrity({ ...anchors, [field]: NaN }, left, right).valid).toBe(false);
+		}
+	);
 });
