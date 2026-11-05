@@ -71,7 +71,7 @@ Project fields (all optional and validated on import): `slide.linen = { colors, 
 
 Edits autosave to IndexedDB in this browser. **Save project** downloads an editable `.appshot.json` file with its source images embedded. **Open project** restores it. The complete export ZIP also contains a self-contained `project.json`. Imported projects are validated before use and only accept local demo images or embedded PNG/JPEG/WebP images.
 
-Undo/redo is available in the toolbar and with ⌘/Ctrl-Z and ⇧-⌘/Ctrl-Z when focus is outside a text field. The editor also works on narrow screens, with the storyboard scrolling horizontally.
+Undo/redo is available in the toolbar and with ⌘/Ctrl-Z and ⇧-⌘/Ctrl-Z when focus is outside a text field; sliders, color pickers and menus use the editor's undo. Typing in one field or dragging one control counts as a single step, and undo returns to the frame the change was made on. The editor also works on narrow screens, with the storyboard scrolling horizontally.
 
 All editing, image processing, storage, and export happen locally. Fonts are bundled under SIL Open Font License; no runtime font service is used. Billington sample-image provenance is recorded in `app/static/demo/README.md`.
 
@@ -80,8 +80,10 @@ All editing, image processing, storage, and export happen locally. Fonts are bun
 - `app/src/lib/model/`: typed composition, style directions, sample campaign, project validation and persistence. `linen.ts` holds the Table Linen defaults, validators, canonical phone geometry and manifest converter; `render/linen.ts` paints it.
 - `app/src/lib/stitch/panorama.ts`: pure canonical geometry for the shared two-panel world; offset is in output pixels.
 - `app/src/lib/render/`: one Canvas renderer used by previews and exports, native PNG encoding, deterministic ZIP assembly, portable projects and contact sheets.
-- `app/src/lib/components/`: preview canvas and SVG icons.
-- `app/src/routes/+page.svelte`: Svelte 5 studio, immutable editing history, import/export and controls.
+- `app/src/lib/editor/`: `store.svelte.ts` owns immutable commits, undo history, selection and autosave timing behind the replaceable `ProjectPersistence` boundary (`persistence.ts`). `studio.svelte.ts` is the controller the panels share through context.
+- `app/src/lib/components/`: preview canvas and SVG icons; `studio/` holds the editor panels.
+- `app/src/routes/+page.svelte`: wires the controller to the panels and window events.
+- `app/src/lib/model/contracts.ts`: planned multi-target interfaces (`OutputTarget`, `ProjectV2`, `ProjectForTarget`, `Preflight`, `ExportMatrix`). Not implemented or used by the product yet.
 
 A connected scene is rasterized as one complete world and cropped into two output rectangles. This avoids subpixel rasterization differences at the seam. Preview canvases use the same scene renderer at a smaller size; exports render at the full selected size. Fonts and images are awaited, and stale asynchronous preview draws cannot overwrite newer edits.
 
@@ -97,7 +99,9 @@ npm run test:e2e
 npm run build
 ```
 
-The unit suite covers seam geometry, ZIP integrity and project validation. Playwright covers real editing, uploads, saving/reloading, reopening portable projects, downloads, PNG dimensions, narrow-screen use, and exact panorama pixel equivalence. To use an existing development server, set `PLAYWRIGHT_BASE_URL=http://127.0.0.1:5173` before the end-to-end command. Otherwise Playwright builds and launches its own production preview.
+The unit suite covers seam geometry, ZIP integrity, project validation and editor history and autosave. Playwright covers real editing, undo grouping, uploads, saving/reloading, reopening portable projects, downloads, PNG dimensions, narrow-screen use, and exact panorama pixel equivalence. To use an existing development server, set `PLAYWRIGHT_BASE_URL=http://127.0.0.1:5173` before the end-to-end command. Otherwise Playwright builds and launches its own production preview on `PLAYWRIGHT_PORT` (default 4173), and fails if that port is taken. Set `PLAYWRIGHT_OUTPUT_DIR` to move traces and screenshots, and `PLAYWRIGHT_CHANNEL=chrome` to use installed Chrome instead of Playwright's Chromium.
+
+CI runs these checks on Node 22 for pushes to `main`, `feat/**` and `codex/**`, for every pull request, and on demand. It uploads Playwright traces and screenshots when a job fails.
 
 ## Visual references
 

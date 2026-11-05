@@ -1,5 +1,6 @@
 import type { StyleId } from './studio';
 import type { DeviceId } from './devices';
+import type { ImageLayer } from './contracts';
 import type { LinenPhone, LinenSettings } from './linen';
 
 export type FrameStyle = 'bezel' | 'clay' | 'wireframe' | 'none';
@@ -61,6 +62,11 @@ export interface Slide {
 	continuity: SlideContinuity;
 	/** Resolved Table Linen settings; ignored by the five original styles. */
 	linen?: LinenSettings;
+	/**
+	 * Reserved for projection: this target's resolved image layers. Nothing paints them yet, and
+	 * `parseProject` drops them until the model owner adds them.
+	 */
+	layers?: ImageLayer[];
 }
 
 export interface Panorama {

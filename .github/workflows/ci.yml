@@ -2,16 +2,21 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'feat/**', 'codex/**']
   pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to Ubuntu 26, which Playwright 1.59 does not officially support.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     defaults:
@@ -20,10 +25,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -49,3 +54,12 @@ jobs:
 
       - name: Browser journeys and export continuity
         run: npm run test:e2e
+
+      - name: Upload Playwright traces and screenshots
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: app/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
