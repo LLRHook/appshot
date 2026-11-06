@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ExportMatrix, Issue, ProjectAsset, ProjectV2 } from '../model/contracts';
 import { DEVICES, type DeviceId } from '../model/devices';
+import { disconnectPair } from '../model/edits';
 import { parseProjectV2 } from '../model/migrate';
 import { projectForTarget } from '../model/targets';
 import type { Composition } from '../model/types';
@@ -448,6 +449,35 @@ describe('a draft export is plainly a draft (E26)', () => {
 		const result = await done(accepted, { scope: 'draft' });
 		const file = result.manifest.files.find((item) => item.target === 'ipad-13')!;
 		expect(file.source).toMatchObject({ compatibility: 'wrong-class', nonNative: { reason } });
+	});
+
+	it('records the accepted reason for both matching captures after a pair is disconnected', async () => {
+		const project = campaign(RECOMMENDED, 2);
+		const reason = 'Pair layout review before recapturing';
+		const source = { asset: 'iphone-6.9:s1', nonNative: { reason } };
+		const paired: ProjectV2 = {
+			...project,
+			continuityMode: 'paired',
+			panorama: {
+				leftId: project.slides[0].id,
+				rightId: project.slides[1].id,
+				offset: 0,
+				scale: 1,
+				tilt: 0,
+				variants: { 'ipad-13': { source } }
+			},
+			slides: project.slides.map((slide) => ({
+				...slide,
+				variants: { ...slide.variants, 'ipad-13': { source: { asset: source.asset } } }
+			}))
+		};
+		const disconnected = disconnectPair(paired);
+		expect((await run(disconnected)).status).toBe('blocked');
+		const result = await done(disconnected, { scope: 'draft' });
+		const files = result.manifest.files.filter((file) => file.target === 'ipad-13');
+		expect(files).toHaveLength(2);
+		for (const file of files)
+			expect(file.source).toMatchObject({ compatibility: 'wrong-class', nonNative: { reason } });
 	});
 
 	it('leaves a frame with no capture out, by name, instead of shipping a placeholder', async () => {

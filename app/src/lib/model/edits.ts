@@ -317,7 +317,14 @@ export function disconnectPair(project: ProjectV2): ProjectV2 {
 			let variants = slide.variants;
 			for (const target of project.targets) {
 				const source = pair.variants?.[target]?.source;
-				if (source && !variants?.[target]?.source)
+				const ownSource = variants?.[target]?.source;
+				// A pair's accepted reason still applies to the same capture after disconnecting.
+				// Keep a frame's different capture or its more specific reason.
+				if (
+					source &&
+					(!ownSource ||
+						(ownSource.asset === source.asset && source.nonNative && !ownSource.nonNative))
+				)
 					variants = { ...variants, [target]: { ...variants?.[target], source } };
 			}
 			return variants === slide.variants ? slide : { ...slide, variants };

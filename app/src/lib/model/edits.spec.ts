@@ -370,6 +370,33 @@ describe('connected pair', () => {
 		expect(broken.continuityMode).toBe('none');
 		expect(() => patchPanoramaVariant(project(), PHONE, { tilt: 1 })).toThrow(/Connect/);
 	});
+
+	it('carries a pair draft reason only to the same capture without a frame-specific reason', () => {
+		let paired = connectPair(project(), 'one', placement);
+		for (const target of [PHONE, MEDIUM, TABLET])
+			paired = patchPanoramaVariant(paired, target, {
+				source: { asset: 'large', nonNative: { reason: `Pair draft for ${target}` } }
+			});
+		paired = setSourceOverride(paired, 'one', PHONE, 'This frame’s own reason');
+		paired = patchSlideVariant(paired, 'one', TABLET, { source: { asset: 'large' } });
+		paired = patchSlideVariant(paired, 'two', TABLET, { source: { asset: 'tablet' } });
+		const off = disconnectPair(deepFreeze(paired));
+		expect(stored(off, 'one').variants?.[PHONE]?.source?.nonNative?.reason).toBe(
+			'This frame’s own reason'
+		);
+		expect(stored(off, 'two').variants?.[PHONE]?.source?.nonNative?.reason).toBe(
+			`Pair draft for ${PHONE}`
+		);
+		expect(stored(off, 'one').variants?.[MEDIUM]?.source).toEqual({ asset: 'medium' });
+		expect(stored(off, 'two').variants?.[MEDIUM]?.source?.nonNative?.reason).toBe(
+			`Pair draft for ${MEDIUM}`
+		);
+		expect(stored(off, 'one').variants?.[TABLET]?.source?.nonNative?.reason).toBe(
+			`Pair draft for ${TABLET}`
+		);
+		expect(stored(off, 'two').variants?.[TABLET]?.source).toEqual({ asset: 'tablet' });
+		expect(stored(off, 'one').variants?.[PHONE]?.scale).toBe(1.2);
+	});
 });
 
 describe('the library', () => {

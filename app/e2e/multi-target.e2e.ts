@@ -424,7 +424,7 @@ test('G-18: a batch places a capture on a visible frame instead of a pair’s hi
 	await expect(page.locator('.current-asset')).toContainText('1290 × 2796');
 });
 
-test('a first capture on a pair’s new output keeps its draft reason on both frames', async ({
+test('a first capture on a pair’s new output keeps its draft reason after disconnect and reload', async ({
 	page
 }) => {
 	await ready(page);
@@ -439,6 +439,24 @@ test('a first capture on a pair’s new output keeps its draft reason on both fr
 	await expect(page.locator('.target-row.active')).toContainText('2/5 captures');
 	await expect(page.locator('.source-findings')).toContainText('accepted for drafts only');
 	await expect(page.locator('.source-findings')).toContainText('Testing the pair layout only');
+	await page.getByRole('switch', { name: 'Connect adjacent screenshots' }).click();
+	const reasons = page.locator('.source-findings button').filter({
+		hasText: 'Testing the pair layout only'
+	});
+	await expect(reasons).toHaveCount(2);
+	await expect(page.locator('.save-status')).toHaveText('All changes saved');
+	const title = await page.getByLabel('Campaign name').inputValue();
+	const saved = JSON.parse((await readSavedCampaign(page, title)).document);
+	for (const slide of saved.slides.slice(0, 2))
+		expect(slide.variants['ipad-13'].source.nonNative).toEqual({
+			reason: 'Testing the pair layout only'
+		});
+	await page.reload();
+	await expect(page.locator('.studio')).not.toHaveClass(/loading/);
+	await page.getByLabel('Active output').selectOption('ipad-13');
+	await expect(reasons).toHaveCount(2);
+	await page.getByRole('button', { name: 'Export set', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Download screenshot set' })).toBeDisabled();
 });
 
 test('capture records and draft reasons survive Save and Open', async ({ page }) => {

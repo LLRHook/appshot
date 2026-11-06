@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_PROJECT_BYTES } from '$lib/model/limits';
 import { createDemo } from '$lib/model/studio';
 import { STYLES } from '$lib/model/studio';
-import { projectForTarget } from '$lib/model/targets';
+import { projectForTarget, sourceIssues } from '$lib/model/targets';
 import { unbindSource } from '$lib/model/edits';
 import type { ProjectV2 } from '$lib/model/contracts';
 import { legacyPersistence, type ProjectPersistence } from './persistence';
@@ -191,6 +191,30 @@ describe('StudioController commands through the store', () => {
 		});
 		expect(studio.store.project.slides[0].variants?.['ipad-13']?.source?.nonNative).toBeUndefined();
 	});
+
+	it.each(['style', 'toggle'])(
+		'disconnecting via %s keeps the accepted draft reason on both matching captures',
+		(command) => {
+			const studio = studioWith();
+			studio.chooseDevice('ipad-13');
+			studio.useAsset(studio.assets[0], 'Internal draft only');
+			const before = studio.store.project;
+			if (command === 'style') studio.chooseStyle('the-check');
+			else studio.toggleLink();
+			expect(studio.composition.panorama).toBeUndefined();
+			for (const slide of studio.store.project.slides.slice(0, 2))
+				expect(slide.variants?.['ipad-13']?.source?.nonNative).toEqual({
+					reason: 'Internal draft only'
+				});
+			const issues = sourceIssues(studio.store.project, ['ipad-13']).filter(
+				(issue) => issue.slideIndex! < 2
+			);
+			expect(issues).toHaveLength(2);
+			expect(issues.every((issue) => issue.code === 'non-native-source')).toBe(true);
+			studio.store.undo();
+			expect(studio.store.project).toEqual(before);
+		}
+	);
 
 	it('connecting The Check frames uses a straight panel and one canvas at the seam', () => {
 		const studio = studioWith();
