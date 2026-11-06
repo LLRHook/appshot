@@ -3,6 +3,7 @@ import { MAX_PROJECT_BYTES } from '$lib/model/limits';
 import { createDemo } from '$lib/model/studio';
 import { STYLES } from '$lib/model/studio';
 import { projectForTarget } from '$lib/model/targets';
+import { unbindSource } from '$lib/model/edits';
 import type { ProjectV2 } from '$lib/model/contracts';
 import { legacyPersistence, type ProjectPersistence } from './persistence';
 import { StudioController, isTextEntry } from './studio.svelte';
@@ -140,7 +141,45 @@ describe('StudioController commands through the store', () => {
 		studio.chooseStyle('the-check');
 		studio.useAsset(studio.assets[0]);
 		expect(studio.composition.panorama).toMatchObject({ tilt: 0, scale: 1, offset: 0 });
+		expect(studio.composition.slides[3].check?.canvas).toBe(
+			studio.composition.slides[2].check?.canvas
+		);
+		expect(studio.composition.slides[3].background).toEqual(
+			studio.composition.slides[2].background
+		);
 	});
+
+	it('The Check disconnects a first-three pair even when all of its captures were removed', () => {
+		const studio = studioWith();
+		studio.removeAsset(studio.displayedImage!.id);
+		expect(studio.composition.panorama).toBeUndefined();
+		studio.chooseStyle('the-check');
+		studio.useAsset(studio.assets[0]);
+		expect(studio.store.project.panorama).toBeUndefined();
+		expect(studio.store.project.continuityMode).toBe('none');
+		expect(studio.composition.panorama).toBeUndefined();
+	});
+
+	it.each(['style', 'toggle'])(
+		'disconnecting via %s keeps captures supplied only by the pair',
+		(command) => {
+			const studio = studioWith();
+			const pair = studio.store.project.panorama!;
+			const asset = pair.variants![studio.targetId]!.source!.asset;
+			let next = studio.store.project;
+			for (const id of [pair.leftId, pair.rightId]) next = unbindSource(next, id, studio.targetId);
+			studio.store.apply(next);
+			expect(studio.composition.slides[0].primaryImage).toBeUndefined();
+			if (command === 'style') studio.chooseStyle('the-check');
+			else studio.toggleLink();
+			expect(studio.composition.panorama).toBeUndefined();
+			for (const slide of studio.composition.slides.slice(0, 2))
+				expect(slide.primaryImage?.id).toBe(asset);
+			studio.store.undo();
+			expect(studio.composition.panorama?.image.id).toBe(asset);
+			expect(studio.composition.slides[0].primaryImage).toBeUndefined();
+		}
+	);
 
 	it('records a first pair binding’s draft reason on the pair instead of the hidden slide source', () => {
 		const studio = studioWith();

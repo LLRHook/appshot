@@ -17,6 +17,7 @@ import {
 	addTarget,
 	applyProjectedEdit,
 	bindPanoramaSource,
+	disconnectPair,
 	duplicateSlide,
 	removeTarget,
 	removeAsset as removeProjectAsset,
@@ -502,6 +503,11 @@ export class StudioController {
 			// A style applies to the set. Reset the shared placement too, so outputs added later
 			// cannot inherit a previous style's tilt while the current output happens to be straight.
 			const pair = this.store.project.panorama;
+			const connectedLeftId =
+				this.store.project.continuityMode === 'paired' ? pair?.leftId : undefined;
+			const leftIndex = this.store.project.slides.findIndex(
+				(slide) => slide.id === connectedLeftId
+			);
 			const placement = { offset: 0, scale: 1, tilt: 0 };
 			let next: ProjectV2 = {
 				...this.store.project,
@@ -525,8 +531,13 @@ export class StudioController {
 					: {}),
 				slides: this.store.project.slides.map((slide) => ({ ...slide, tilt: 0, scale: 1 }))
 			};
+			if (connectedLeftId && leftIndex < 2) next = disconnectPair(next);
 			for (const target of next.targets)
-				next = applyProjectedEdit(next, target, applyCheckStyle(projectForTarget(next, target)));
+				next = applyProjectedEdit(
+					next,
+					target,
+					applyCheckStyle(projectForTarget(next, target), connectedLeftId)
+				);
 			this.#commitProject(next);
 			return;
 		}
@@ -697,7 +708,7 @@ export class StudioController {
 	toggleLink() {
 		const { composition: project, slide, selected, isLinen, isCheck, linen } = this;
 		if (this.isLinked) {
-			this.#commit({ ...project, panorama: undefined, continuityMode: 'none' });
+			this.#commitProject(disconnectPair(this.store.project));
 			return;
 		}
 		const next = project.slides[selected + 1];

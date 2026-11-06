@@ -308,7 +308,21 @@ export function connectPair(
 }
 
 export function disconnectPair(project: ProjectV2): ProjectV2 {
-	return { ...omit(project, 'panorama'), continuityMode: 'none' };
+	const pair = project.panorama;
+	return {
+		...omit(project, 'panorama'),
+		continuityMode: 'none',
+		slides: project.slides.map((slide) => {
+			if (!pair || (slide.id !== pair.leftId && slide.id !== pair.rightId)) return slide;
+			let variants = slide.variants;
+			for (const target of project.targets) {
+				const source = pair.variants?.[target]?.source;
+				if (source && !variants?.[target]?.source)
+					variants = { ...variants, [target]: { ...variants?.[target], source } };
+			}
+			return variants === slide.variants ? slide : { ...slide, variants };
+		})
+	};
 }
 
 /* ----------------------------------------------------------------------------------- the library */

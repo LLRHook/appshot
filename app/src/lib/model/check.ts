@@ -1535,12 +1535,18 @@ export function checkLint(composition: Composition): Issue[] {
  * first three frames is disconnected, because each of those must work alone in search results;
  * later pairs stay connected on one canvas. Pure.
  */
-export function applyCheckStyle(composition: Composition): Composition {
+export function applyCheckStyle(
+	composition: Composition,
+	// A stored pair can still share a canvas before this output has its first capture.
+	connectedLeftId: string | undefined = composition.continuityMode === 'paired'
+		? composition.panorama?.leftId
+		: undefined
+): Composition {
 	const panorama = composition.panorama;
-	const leftIndex = panorama
-		? composition.slides.findIndex((slide) => slide.id === panorama.leftId)
+	const leftIndex = connectedLeftId
+		? composition.slides.findIndex((slide) => slide.id === connectedLeftId)
 		: -1;
-	const keepPair = composition.continuityMode === 'paired' && leftIndex >= 2;
+	const keepPair = leftIndex >= 2;
 	const count = composition.slides.length;
 	const settings = composition.slides.map((slide, index) => {
 		const current = slide.check ?? defaultCheckSettings(index, count);
@@ -1556,7 +1562,7 @@ export function applyCheckStyle(composition: Composition): Composition {
 		...composition,
 		style: CHECK_STYLE_ID,
 		accent: CHECK_PALETTES.teal.accent,
-		continuityMode: keepPair ? 'paired' : 'none',
+		continuityMode: keepPair && panorama ? 'paired' : 'none',
 		...(keepPair && panorama
 			? { panorama: { ...panorama, tilt: 0, offset: 0, scale: 1 } }
 			: { panorama: undefined }),
