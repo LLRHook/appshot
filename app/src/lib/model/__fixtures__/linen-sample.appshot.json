@@ -1,0 +1,338 @@
+{
+	"version": 1,
+	"name": "Linen sample",
+	"device": "iphone-6.9",
+	"style": "table-linen",
+	"accent": "#CFA54B",
+	"continuityMode": "paired",
+	"slides": [
+		{
+			"id": "night-sky",
+			"device": "iphone-6.9",
+			"label": "Night sky",
+			"background": {
+				"kind": "solid",
+				"colors": ["#256B70"]
+			},
+			"frame": "bezel",
+			"layout": "text-above",
+			"typography": {
+				"headline": "Clear skies.\n*Bring a blanket.*",
+				"subtitle": "Moonrise comes at nine,\nand the ridge stays dark.",
+				"fontColor": "#FBF6EF",
+				"fontWeight": 400
+			},
+			"effects": {
+				"shadow": "soft",
+				"glow": 0
+			},
+			"continuity": {
+				"inset": 0
+			},
+			"primaryImage": {
+				"id": "capture-sky",
+				"blobUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGPgEpEDAABoAD1UCKP3AAAAAElFTkSuQmCC",
+				"naturalWidth": 1320,
+				"naturalHeight": 2868
+			},
+			"linen": {
+				"colors": {
+					"canvas": "#256B70",
+					"band": "#24645F",
+					"headline": "#FBF6EF",
+					"accent": "#CFA54B",
+					"subtitle": "#CFE3E0",
+					"wordmark": "#FBF6EF",
+					"dot": "#CFA54B",
+					"shell": "#292C2C",
+					"shellEdge": "#515A59",
+					"shadow": "#000000",
+					"shadowOpacity": 0.3
+				},
+				"layout": {
+					"margin": 96,
+					"wordmarkTop": 128,
+					"headlineTop": 248,
+					"headlineWidth": 1128,
+					"headlineSize": 118,
+					"headlineLeading": 120,
+					"headlineTracking": -1.77,
+					"subtitleTop": 528,
+					"subtitleWidth": 1000,
+					"subtitleSize": 44,
+					"subtitleLeading": 57,
+					"bandTop": 2040
+				},
+				"phone": {
+					"mode": "full",
+					"top": 760,
+					"bottom": 2740,
+					"maxWidth": 1038,
+					"centerX": 660,
+					"shell": 24,
+					"radius": 60,
+					"frameless": false,
+					"shadow": true,
+					"rotation": 0,
+					"hardware": "iphone-17-pro-max",
+					"dynamicIsland": "draw",
+					"hardwareButtons": true
+				},
+				"band": true
+			}
+		},
+		{
+			"id": "orion",
+			"device": "iphone-6.9",
+			"label": "Orion",
+			"background": {
+				"kind": "solid",
+				"colors": ["#256B70"]
+			},
+			"frame": "bezel",
+			"layout": "text-above",
+			"typography": {
+				"headline": "Orion climbs.\n*Look east by ten.*",
+				"subtitle": "The charts follow\nthe turning season.",
+				"fontColor": "#FBF6EF",
+				"fontWeight": 400
+			},
+			"effects": {
+				"shadow": "soft",
+				"glow": 0
+			},
+			"continuity": {
+				"inset": 0
+			},
+			"primaryImage": {
+				"id": "capture-sky",
+				"blobUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGPgEpEDAABoAD1UCKP3AAAAAElFTkSuQmCC",
+				"naturalWidth": 1320,
+				"naturalHeight": 2868
+			},
+			"linen": {
+				"colors": {
+					"canvas": "#256B70",
+					"band": "#24645F",
+					"headline": "#FBF6EF",
+					"accent": "#CFA54B",
+					"subtitle": "#CFE3E0",
+					"wordmark": "#FBF6EF",
+					"dot": "#CFA54B",
+					"shell": "#292C2C",
+					"shellEdge": "#515A59",
+					"shadow": "#000000",
+					"shadowOpacity": 0.3
+				},
+				"layout": {
+					"margin": 96,
+					"wordmarkTop": 128,
+					"headlineTop": 248,
+					"headlineWidth": 1128,
+					"headlineSize": 118,
+					"headlineLeading": 120,
+					"headlineTracking": -1.77,
+					"subtitleTop": 528,
+					"subtitleWidth": 1000,
+					"subtitleSize": 44,
+					"subtitleLeading": 57,
+					"bandTop": 2040
+				},
+				"phone": {
+					"mode": "full",
+					"top": 760,
+					"bottom": 2740,
+					"maxWidth": 1038,
+					"centerX": 660,
+					"shell": 24,
+					"radius": 60,
+					"frameless": false,
+					"shadow": true,
+					"rotation": 0,
+					"hardware": "iphone-17-pro-max",
+					"dynamicIsland": "draw",
+					"hardwareButtons": true
+				},
+				"band": true
+			}
+		},
+		{
+			"id": "meteor-log",
+			"device": "iphone-6.9",
+			"label": "Meteor log",
+			"background": {
+				"kind": "solid",
+				"colors": ["#FBF6EF"]
+			},
+			"frame": "bezel",
+			"layout": "text-above",
+			"typography": {
+				"headline": "Forty streaks,\n*then cold hands.*",
+				"subtitle": "Count them from the hill\nbefore the first light.",
+				"fontColor": "#2C2C2C",
+				"fontWeight": 400
+			},
+			"effects": {
+				"shadow": "soft",
+				"glow": 0
+			},
+			"continuity": {
+				"inset": 0
+			},
+			"primaryImage": {
+				"id": "capture-log",
+				"blobUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGMQ0bABAADMAHm9FcOvAAAAAElFTkSuQmCC",
+				"naturalWidth": 1320,
+				"naturalHeight": 2868
+			},
+			"linen": {
+				"colors": {
+					"canvas": "#FBF6EF",
+					"band": "#F1E2D2",
+					"headline": "#2C2C2C",
+					"accent": "#256B70",
+					"subtitle": "#4C5B6B",
+					"wordmark": "#2C2C2C",
+					"dot": "#CFA54B",
+					"shell": "#292C2C",
+					"shellEdge": "#515A59",
+					"shadow": "#256B70",
+					"shadowOpacity": 0.18
+				},
+				"layout": {
+					"margin": 96,
+					"wordmarkTop": 128,
+					"headlineTop": 248,
+					"headlineWidth": 1128,
+					"headlineSize": 118,
+					"headlineLeading": 120,
+					"headlineTracking": -1.77,
+					"subtitleTop": 528,
+					"subtitleWidth": 1000,
+					"subtitleSize": 44,
+					"subtitleLeading": 57,
+					"bandTop": 2040
+				},
+				"phone": {
+					"mode": "full",
+					"top": 760,
+					"bottom": 2740,
+					"maxWidth": 1038,
+					"centerX": 660,
+					"shell": 24,
+					"radius": 60,
+					"frameless": false,
+					"shadow": true,
+					"rotation": 0,
+					"hardware": "iphone-17-pro-max",
+					"dynamicIsland": "draw",
+					"hardwareButtons": true
+				},
+				"band": true
+			}
+		},
+		{
+			"id": "lens-notes",
+			"device": "iphone-6.9",
+			"label": "Lens notes",
+			"background": {
+				"kind": "solid",
+				"colors": ["#256B70"]
+			},
+			"frame": "bezel",
+			"layout": "text-above",
+			"typography": {
+				"headline": "Fog on the glass.\n*Wipe it once.*",
+				"subtitle": "A soft cloth lives\nin the left pocket.",
+				"fontColor": "#FBF6EF",
+				"fontWeight": 400
+			},
+			"effects": {
+				"shadow": "soft",
+				"glow": 0
+			},
+			"continuity": {
+				"inset": 0
+			},
+			"primaryImage": {
+				"id": "capture-lens",
+				"blobUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGPQCKgAAAGUAPG6nb+jAAAAAElFTkSuQmCC",
+				"naturalWidth": 1320,
+				"naturalHeight": 2868
+			},
+			"linen": {
+				"colors": {
+					"canvas": "#256B70",
+					"band": "#24645F",
+					"headline": "#FBF6EF",
+					"accent": "#CFA54B",
+					"subtitle": "#CFE3E0",
+					"wordmark": "#FBF6EF",
+					"dot": "#CFA54B",
+					"shell": "#292C2C",
+					"shellEdge": "#515A59",
+					"shadow": "#000000",
+					"shadowOpacity": 0.3
+				},
+				"layout": {
+					"margin": 96,
+					"wordmarkTop": 128,
+					"headlineTop": 248,
+					"headlineWidth": 1128,
+					"headlineSize": 118,
+					"headlineLeading": 120,
+					"headlineTracking": -1.77,
+					"subtitleTop": 528,
+					"subtitleWidth": 1000,
+					"subtitleSize": 44,
+					"subtitleLeading": 57,
+					"bandTop": 2040
+				},
+				"phone": {
+					"mode": "full",
+					"top": 760,
+					"bottom": 2740,
+					"maxWidth": 1038,
+					"centerX": 660,
+					"shell": 24,
+					"radius": 60,
+					"frameless": false,
+					"shadow": true,
+					"rotation": 0,
+					"hardware": "iphone-17-pro-max",
+					"dynamicIsland": "draw",
+					"hardwareButtons": true
+				},
+				"band": true
+			}
+		}
+	],
+	"panorama": {
+		"leftId": "night-sky",
+		"rightId": "orion",
+		"image": {
+			"id": "capture-sky",
+			"blobUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGPgEpEDAABoAD1UCKP3AAAAAElFTkSuQmCC",
+			"naturalWidth": 1320,
+			"naturalHeight": 2868
+		},
+		"offset": 0,
+		"scale": 1,
+		"tilt": 0,
+		"linenPhone": {
+			"mode": "full",
+			"top": 700,
+			"bottom": 2760,
+			"maxWidth": 900,
+			"centerX": 1200,
+			"shell": 24,
+			"radius": 60,
+			"frameless": false,
+			"shadow": true,
+			"rotation": -3.5,
+			"hardware": "iphone-17-pro-max",
+			"dynamicIsland": "draw",
+			"hardwareButtons": true
+		}
+	}
+}

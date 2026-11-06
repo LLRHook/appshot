@@ -1,0 +1,19 @@
+node_modules/
+.svelte-kit/
+build/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+
+# Project data and exports stay out of the repository; only test fixtures are tracked
+private/
+/captures/
+*.appshot.json
+!app/src/lib/model/__fixtures__/*.appshot.json
+*-app-store-set.zip
+
+# Sample paths earlier builds used; the bundled samples live in app/static/sample/
+app/static/demo/
+app/static/brand/

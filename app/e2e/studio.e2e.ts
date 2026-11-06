@@ -1,0 +1,782 @@
+import { test, expect, type Page, type TestInfo } from '@playwright/test';
+import { readFile, mkdir } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import path from 'node:path';
+import type { ProjectV2 } from '../src/lib/model/contracts';
+import { defaultLinenSettings } from '../src/lib/model/linen';
+import { createDemoProjectV2, serializeStoredProject } from '../src/lib/model/migrate';
+import { createDemo } from '../src/lib/model/studio';
+import { projectForTarget } from '../src/lib/model/targets';
+
+const fixture = (name: string) => path.resolve('static/sample', `${name}.png`);
+const frames = (page: Page) => page.getByRole('button', { name: /^Select screenshot \d+$/ });
+const composition = (project: ProjectV2) => projectForTarget(project, project.targets[0]);
+
+async function openStudio(page: Page) {
+	await page.goto('/');
+	await expect(page.locator('.studio')).not.toHaveClass(/loading/);
+	await expect(page.getByLabel('Campaign name')).toHaveValue('Sample Garden');
+	await expect(frames(page)).toHaveCount(5);
+}
+
+async function artifactPath(testInfo: TestInfo, name: string) {
+	const directory = process.env.PLAYWRIGHT_ARTIFACT_DIR
+		? path.join(process.env.PLAYWRIGHT_ARTIFACT_DIR, testInfo.title.replace(/[^a-z0-9]+/gi, '-'))
+		: testInfo.outputDir;
+	await mkdir(directory, { recursive: true });
+	return path.join(directory, name);
+}
+
+async function saveProjectFile(page: Page, testInfo: TestInfo, name = 'project.appshot.json') {
+	const pending = page.waitForEvent('download');
+	await page.getByRole('button', { name: 'Save project', exact: true }).click();
+	const download = await pending;
+	expect(download.suggestedFilename()).toMatch(/\.appshot\.json$/);
+	const destination = await artifactPath(testInfo, name);
+	await download.saveAs(destination);
+	return {
+		file: destination,
+		project: JSON.parse(await readFile(destination, 'utf8')) as ProjectV2
+	};
+}
+
+async function exportFile(page: Page, testInfo: TestInfo, action: string, name: string) {
+	await page.getByRole('button', { name: 'Export set' }).click();
+	const dialog = page.getByRole('dialog');
+	await expect(dialog).toBeVisible();
+	if (action === 'Download draft set')
+		await dialog.getByRole('button', { name: 'Draft set', exact: true }).click();
+	const pending = page.waitForEvent('download');
+	await dialog.getByRole('button', { name: action }).click();
+	const download = await pending;
+	const destination = await artifactPath(testInfo, name);
+	await download.saveAs(destination);
+	await expect(dialog).not.toBeVisible();
+	return { bytes: await readFile(destination), filename: download.suggestedFilename() };
+}
+
+type CanvasTextCall = { text: string; bottom: number };
+type TextCaptureWindow = Window & { appshotTextCalls: CanvasTextCall[] };
+
+async function observeExportedText(page: Page) {
+	await page.addInitScript(() => {
+		const records: CanvasTextCall[] = [];
+		(window as TextCaptureWindow).appshotTextCalls = records;
+		const original = CanvasRenderingContext2D.prototype.fillText;
+		CanvasRenderingContext2D.prototype.fillText = function (
+			this: CanvasRenderingContext2D,
+			text: string,
+			x: number,
+			y: number,
+			maxWidth?: number
+		) {
+			if (this.canvas.width >= 1320)
+				records.push({ text, bottom: y + this.measureText(text).actualBoundingBoxDescent });
+			if (maxWidth === undefined) original.call(this, text, x, y);
+			else original.call(this, text, x, y, maxWidth);
+		};
+	});
+}
+
+test('renders every word of the accepted 220-character supporting copy in the export', async ({
+	page
+}, testInfo) => {
+	await observeExportedText(page);
+	await openStudio(page);
+	const copy =
+		'Gulls wheel above the breakwater while a slow ferry crosses the bay, and the old lighthouse keeps its lamp burning through fog. Waves fold over the shingle, a cold wind turns the weather vane, and the harbor settles at l';
+	expect(copy).toHaveLength(220);
+	await page.getByLabel('Supporting text').fill(copy);
+	await page.evaluate(() => {
+		(window as TextCaptureWindow).appshotTextCalls.length = 0;
+	});
+	const exported = await exportFile(page, testInfo, 'Draft PNG', 'complete-supporting-copy.png');
+	expect(pngDimensions(exported.bytes)).toEqual({ width: 1320, height: 2868 });
+	const drawn = await page.evaluate(() =>
+		(window as TextCaptureWindow).appshotTextCalls
+			.map((call) => call.text)
+			.join(' ')
+			.replace(/\s+/g, ' ')
+	);
+	expect(drawn).toContain(copy);
+});
+
+for (const limits of [
+	{ name: 'editor', title: 100, subtitle: 220 },
+	{ name: 'imported project', title: 180, subtitle: 300 }
+]) {
+	test(`fits maximum ${limits.name} text and excessive headline newlines without losing words`, async ({
+		page
+	}, testInfo) => {
+		await observeExportedText(page);
+		await openStudio(page);
+		const headline = 'Good\n'.repeat(limits.title / 5);
+		const subtitle = 'Gulls wheel above the harbor wall in the fog. '
+			.repeat(8)
+			.slice(0, limits.subtitle);
+		if (limits.name === 'editor') {
+			await page.getByLabel('Headline', { exact: false }).fill(headline);
+			await page.getByLabel('Supporting text').fill(subtitle);
+		} else {
+			const saved = await saveProjectFile(page, testInfo);
+			saved.project.slides[0].typography.headline = headline;
+			saved.project.slides[0].typography.subtitle = subtitle;
+			await page.getByLabel('Open Appshot project').setInputFiles({
+				name: 'maximum-text.appshot.json',
+				mimeType: 'application/json',
+				buffer: Buffer.from(JSON.stringify(saved.project))
+			});
+			await expect(page.locator('.studio')).not.toHaveClass(/loading/);
+		}
+		await page.evaluate(() => {
+			(window as TextCaptureWindow).appshotTextCalls.length = 0;
+		});
+		await exportFile(page, testInfo, 'Draft PNG', 'maximum-text.png');
+		const calls = await page.evaluate(() => (window as TextCaptureWindow).appshotTextCalls);
+		const start = calls.findIndex((call) => call.text === 'Sample app') + 1;
+		expect(start).toBeGreaterThan(0);
+		// A pair paints its neighbor into the shared buffer too; its wordmark ends this frame's copy.
+		const end = calls.findIndex((call, index) => index >= start && call.text === 'Sample Garden');
+		expect(end).toBeGreaterThan(start);
+		const content = calls.slice(start, end);
+		const drawn = content
+			.map((call) => call.text)
+			.join(' ')
+			.replace(/\s+/g, ' ')
+			.trim();
+		expect(drawn).toBe(`${headline} ${subtitle}`.replace(/\s+/g, ' ').trim());
+		for (const call of content) expect(call.bottom).toBeLessThan(2868 * 0.4);
+	});
+}
+
+// Inspect the downloaded file independently of Appshot's ZIP writer.
+function zipEntries(bytes: Buffer) {
+	const end = bytes.length - 22;
+	expect(bytes.readUInt32LE(end)).toBe(0x06054b50);
+	const count = bytes.readUInt16LE(end + 10);
+	let offset = bytes.readUInt32LE(end + 16);
+	const entries = new Map<string, Buffer>();
+	for (let index = 0; index < count; index++) {
+		expect(bytes.readUInt32LE(offset)).toBe(0x02014b50);
+		const method = bytes.readUInt16LE(offset + 10);
+		const length = bytes.readUInt32LE(offset + 24);
+		const nameLength = bytes.readUInt16LE(offset + 28);
+		const extraLength = bytes.readUInt16LE(offset + 30);
+		const commentLength = bytes.readUInt16LE(offset + 32);
+		const local = bytes.readUInt32LE(offset + 42);
+		const name = bytes.subarray(offset + 46, offset + 46 + nameLength).toString('utf8');
+		expect(method).toBe(0);
+		expect(bytes.readUInt32LE(local)).toBe(0x04034b50);
+		const start = local + 30 + bytes.readUInt16LE(local + 26) + bytes.readUInt16LE(local + 28);
+		expect(entries.has(name)).toBe(false);
+		entries.set(name, bytes.subarray(start, start + length));
+		offset += 46 + nameLength + extraLength + commentLength;
+	}
+	return entries;
+}
+
+function pngDimensions(bytes: Buffer) {
+	expect([...bytes.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+	expect(bytes.subarray(12, 16).toString()).toBe('IHDR');
+	return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+}
+
+test('the Studio exports both output sizes and labels a selected-size archive partial', async ({
+	page
+}, testInfo) => {
+	await openStudio(page);
+	await page.getByRole('button', { name: 'New campaign', exact: true }).click();
+	await page.getByLabel('Campaign name').fill('Matrix UI fixture');
+	await page.getByLabel('Campaign name').press('Tab');
+	await page.getByLabel('Headline', { exact: false }).fill('Fog lifts off the bay.');
+	for (const [target, width, height] of [
+		['iphone-6.9', 1320, 2868],
+		['iphone-di-medium-1206x2622', 1206, 2622]
+	] as const) {
+		await page.getByLabel('Active output').selectOption(target);
+		const encoded = await page.evaluate(
+			({ width, height }) => {
+				const canvas = document.createElement('canvas');
+				canvas.width = width;
+				canvas.height = height;
+				const ctx = canvas.getContext('2d', { alpha: false })!;
+				ctx.fillStyle = '#fbf6ef';
+				ctx.fillRect(0, 0, width, height);
+				ctx.fillStyle = '#245c57';
+				ctx.fillRect(80, 180, width - 160, height - 360);
+				ctx.fillStyle = '#e8c86c';
+				ctx.fillRect(140, 300, width - 280, 350);
+				return canvas.toDataURL('image/png').split(',')[1];
+			},
+			{ width, height }
+		);
+		await page.getByLabel('Upload screenshots', { exact: true }).setInputFiles({
+			name: `SYNTHETIC-${target}.png`,
+			mimeType: 'image/png',
+			buffer: Buffer.from(encoded, 'base64')
+		});
+		await expect(page.locator('.studio')).not.toHaveClass(/loading/);
+		await expect(page.locator('.target-row.active')).toContainText('1/1 captures');
+	}
+	const full = await exportFile(page, testInfo, 'Download draft set', 'two-output-ui.zip');
+	const files = zipEntries(full.bytes);
+	const manifest = JSON.parse(files.get('manifest.json')!.toString());
+	expect(manifest.partial).toBe(false);
+	expect(manifest.scope).toBe('draft');
+	expect(manifest.files).toHaveLength(2);
+	for (const file of manifest.files) {
+		const png = files.get(file.path)!;
+		expect(png).toBeDefined();
+		expect(png[25]).toBe(2); // RGB, independently read from IHDR.
+		expect(createHash('sha256').update(png).digest('hex')).toBe(file.sha256);
+	}
+	expect(
+		[...files.entries()]
+			.filter(([name]) => name.endsWith('.png'))
+			.map(([, png]) => pngDimensions(png))
+	).toEqual(
+		expect.arrayContaining([
+			{ width: 1320, height: 2868 },
+			{ width: 1206, height: 2622 }
+		])
+	);
+	const portable = JSON.parse(files.get('project.json')!.toString()) as ProjectV2;
+	expect(portable.targets).toEqual(
+		expect.arrayContaining(['iphone-6.9', 'iphone-di-medium-1206x2622'])
+	);
+	expect(Object.values(portable.assets)).toHaveLength(2);
+	await page.getByRole('button', { name: 'Export set' }).click();
+	const dialog = page.getByRole('dialog');
+	await dialog.getByLabel('Output sizes', { exact: true }).selectOption('current');
+	const [download] = await Promise.all([
+		page.waitForEvent('download', { timeout: 20_000 }),
+		dialog.getByRole('button', { name: /^Download draft set/ }).click({ timeout: 15_000 })
+	]);
+	expect(download.suggestedFilename()).toContain('DRAFT-PARTIAL');
+	const subset = zipEntries(await readFile((await download.path())!));
+	const subsetManifest = JSON.parse(subset.get('manifest.json')!.toString());
+	expect(subsetManifest.partial).toBe(true);
+	expect(subsetManifest.files).toHaveLength(1);
+	expect(subset.has('PARTIAL-NOT-A-COMPLETE-SET.txt')).toBe(true);
+	expect((JSON.parse(subset.get('project.json')!.toString()) as ProjectV2).targets).toHaveLength(2);
+	await expect(dialog.getByRole('alert')).toContainText('partial');
+	await dialog.getByRole('button', { name: 'Close export dialog' }).click();
+});
+
+test('edits a campaign, restores local changes, and opens a saved project in a fresh browser', async ({
+	page,
+	browser
+}, testInfo) => {
+	await openStudio(page);
+	await page.getByLabel('Campaign name').fill('Harbor charts');
+	await page.getByLabel('Campaign name').press('Tab');
+	await page
+		.getByLabel('Headline', { exact: false })
+		.fill('Gulls over the pier.\nGrey water below.');
+	await page.getByLabel('Supporting text').fill('Gulls circle the breakwater after the rain.');
+	await page.getByLabel('Eyebrow / caption').fill('Sea fog');
+	await page.getByRole('button', { name: 'Apply Sunday paper style' }).click();
+	await expect(page.getByRole('button', { name: 'Apply Sunday paper style' })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	await page.getByRole('button', { name: 'Select screenshot 3', exact: true }).click();
+	await page.getByRole('button', { name: 'Composition', exact: true }).click();
+	await page.getByLabel('Text placement').selectOption('text-below');
+	await page.getByLabel('Device frame', { exact: true }).selectOption('clay');
+	await page.getByLabel('Rotation', { exact: false }).press('End');
+	await expect(page.locator('.save-status')).toHaveText('All changes saved');
+	await page.reload();
+	await expect(page.locator('.studio')).not.toHaveClass(/loading/);
+	await expect(page.getByLabel('Campaign name')).toHaveValue('Harbor charts');
+	await expect(page.getByLabel('Headline', { exact: false })).toHaveValue(
+		'Gulls over the pier.\nGrey water below.'
+	);
+	await expect(page.getByLabel('Supporting text')).toHaveValue(
+		'Gulls circle the breakwater after the rain.'
+	);
+	await expect(page.getByRole('button', { name: 'Apply Sunday paper style' })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	const saved = await saveProjectFile(page, testInfo);
+	expect(saved.project.version).toBe(2);
+	expect(composition(saved.project).slides[2]).toMatchObject({
+		layout: 'text-below',
+		frame: 'clay',
+		tilt: 30
+	});
+	expect(saved.project.slides[0].badge).toBe('Sea fog');
+	const clean = await browser.newContext();
+	try {
+		const imported = await clean.newPage();
+		await imported.goto(page.url());
+		await expect(imported.locator('.studio')).not.toHaveClass(/loading/);
+		await expect(imported.getByLabel('Campaign name')).toHaveValue('Sample Garden');
+		await imported.getByLabel('Open Appshot project').setInputFiles(saved.file);
+		await expect(imported.getByLabel('Campaign name')).toHaveValue('Harbor charts');
+		await expect(imported.getByLabel('Headline', { exact: false })).toHaveValue(
+			'Gulls over the pier.\nGrey water below.'
+		);
+		await expect(frames(imported)).toHaveCount(5);
+		await expect(
+			imported.getByRole('switch', { name: 'Connect adjacent screenshots' })
+		).toBeChecked();
+	} finally {
+		await clean.close();
+	}
+});
+
+test('uploads real screenshots, connects frames, reorders, duplicates, deletes, and undoes changes', async ({
+	page
+}, testInfo) => {
+	await openStudio(page);
+	await page.getByRole('button', { name: 'New campaign', exact: true }).click();
+	await expect(frames(page)).toHaveCount(1);
+	await page
+		.getByLabel('Upload screenshots', { exact: true })
+		.setInputFiles([fixture('today'), fixture('journal')]);
+	await expect(frames(page)).toHaveCount(2);
+	await page.getByLabel('Headline', { exact: false }).fill('Boats at anchor');
+	await page.getByRole('button', { name: 'Select screenshot 2', exact: true }).click();
+	await page.getByLabel('Headline', { exact: false }).fill('Coil the ropes');
+	await page.getByRole('button', { name: 'Select screenshot 1', exact: true }).click();
+	await page.getByRole('switch', { name: 'Connect adjacent screenshots' }).click();
+	await expect(page.getByRole('switch', { name: 'Connect adjacent screenshots' })).toBeChecked();
+	await page.getByRole('button', { name: 'Duplicate screenshot', exact: true }).click();
+	await expect(frames(page)).toHaveCount(3);
+	await expect(page.getByLabel('Headline', { exact: false })).toHaveValue('Boats at anchor');
+	// The duplicate follows the intact pair. Moving it left then exercises breaking that pair.
+	await page.getByRole('button', { name: 'Move screenshot left', exact: true }).click();
+	const reordered = await saveProjectFile(page, testInfo, 'reordered.appshot.json');
+	expect(reordered.project.slides.map((slide) => slide.typography.headline)).toEqual([
+		'Boats at anchor',
+		'Boats at anchor',
+		'Coil the ropes'
+	]);
+	expect(new Set(reordered.project.slides.map((slide) => slide.id)).size).toBe(3);
+	expect(reordered.project.continuityMode).toBe('none');
+	expect(
+		composition(reordered.project).slides.every((slide) =>
+			slide.primaryImage?.blobUrl.startsWith('data:image/png;base64,')
+		)
+	).toBe(true);
+	await page.getByRole('button', { name: 'Delete screenshot', exact: true }).click();
+	await expect(frames(page)).toHaveCount(2);
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(frames(page)).toHaveCount(3);
+	await page.getByRole('button', { name: 'Redo', exact: true }).click();
+	await expect(frames(page)).toHaveCount(2);
+	await expect(page.getByLabel('Headline', { exact: false })).toHaveValue('Coil the ropes');
+	await page.getByLabel('Replace screenshot', { exact: true }).setInputFiles(fixture('schedule'));
+	await expect(page.getByRole('img', { name: 'Current raw screenshot' })).toHaveAttribute(
+		'src',
+		/^blob:/
+	);
+	await expect(page.locator('.save-status')).toHaveText('All changes saved');
+	await page.reload();
+	await expect(page.locator('.studio')).not.toHaveClass(/loading/);
+	await expect(frames(page)).toHaveCount(2);
+	await expect(page.getByLabel('Headline', { exact: false })).toHaveValue('Boats at anchor');
+});
+
+test('downloads a labelled draft ZIP of exact-size PNGs and reopens its portable project', async ({
+	page,
+	browser
+}, testInfo) => {
+	await openStudio(page);
+	const exported = await exportFile(
+		page,
+		testInfo,
+		'Download draft set',
+		'sample-garden-app-store-set.zip'
+	);
+	expect(exported.filename).toBe('sample-garden-DRAFT-app-store-set.zip');
+	const entries = zipEntries(exported.bytes);
+	const pngs = [...entries.entries()].filter(([name]) => name.endsWith('.png'));
+	expect(pngs).toHaveLength(5);
+	expect(entries.size).toBe(8);
+	for (const [[name, bytes], index] of pngs.map((entry, index) => [entry, index] as const)) {
+		expect(name).toMatch(
+			new RegExp(`^DRAFT-NOT-FOR-APP-STORE/.+/DRAFT-0${index + 1}-.+-1320x2868\\.png$`)
+		);
+		expect(pngDimensions(bytes)).toEqual({ width: 1320, height: 2868 });
+		expect(bytes.length).toBeGreaterThan(50_000);
+	}
+	const embedded = entries.get('project.json');
+	expect(embedded).toBeDefined();
+	const project = JSON.parse(embedded!.toString()) as ProjectV2;
+	expect(project.version).toBe(2);
+	const manifest = JSON.parse(entries.get('manifest.json')!.toString());
+	expect(manifest.scope).toBe('draft');
+	expect(manifest.readiness).toBe('draft-not-store-ready');
+	expect(manifest.files).toHaveLength(5);
+	expect(
+		composition(project).slides.every((slide) =>
+			slide.primaryImage?.blobUrl.startsWith('data:image/png;base64,')
+		)
+	).toBe(true);
+	expect(composition(project).panorama?.image.blobUrl).toMatch(/^data:image\/png;base64,/);
+	const isolated = await browser.newContext();
+	try {
+		const imported = await isolated.newPage();
+		await imported.goto(page.url());
+		await expect(imported.locator('.studio')).not.toHaveClass(/loading/);
+		await imported.route('**/sample/*.png', (route) => route.abort());
+		await imported.getByLabel('Open Appshot project').setInputFiles({
+			name: exported.filename,
+			mimeType: 'application/zip',
+			buffer: exported.bytes
+		});
+		await expect(imported.getByRole('status')).toContainText('Project opened');
+		const roundTrip = await exportFile(imported, testInfo, 'Draft PNG', 'reopened-first.png');
+		expect(pngDimensions(roundTrip.bytes)).toEqual({ width: 1320, height: 2868 });
+		expect(roundTrip.bytes.equals(pngs[0][1])).toBe(true);
+	} finally {
+		await isolated.close();
+	}
+	await page.screenshot({
+		path: await artifactPath(testInfo, 'studio-desktop.png'),
+		fullPage: true
+	});
+});
+
+test('exports the selected frame with its size in the filename and a contact sheet', async ({
+	page
+}, testInfo) => {
+	await openStudio(page);
+	await page.getByRole('button', { name: 'Select screenshot 3', exact: true }).click();
+	await page.getByLabel('Active output').selectOption('ipad-13');
+	await expect(page.locator('.current-asset img')).toHaveCount(0);
+	const buffer = await page.evaluate(() => {
+		const canvas = document.createElement('canvas');
+		canvas.width = 2064;
+		canvas.height = 2752;
+		const ctx = canvas.getContext('2d', { alpha: false })!;
+		ctx.fillStyle = '#fbf6ef';
+		ctx.fillRect(0, 0, canvas.width, canvas.height);
+		ctx.fillStyle = '#245c57';
+		ctx.fillRect(120, 240, 1824, 2000);
+		ctx.fillStyle = '#fff';
+		ctx.font = '80px sans-serif';
+		ctx.fillText('SYNTHETIC IPAD TEST FIXTURE', 160, 450);
+		return canvas.toDataURL('image/png').split(',')[1];
+	});
+	await page.getByLabel('Upload screenshots', { exact: true }).setInputFiles(
+		Array.from({ length: 5 }, (_, index) => ({
+			name: `ipad-test-${index}.png`,
+			mimeType: 'image/png',
+			buffer: Buffer.from(buffer, 'base64')
+		}))
+	);
+	await expect(page.locator('.studio')).not.toHaveClass(/loading/);
+	await expect(page.locator('.target-row.active')).toContainText('5/5 captures');
+	const single = await exportFile(page, testInfo, 'Draft PNG', 'ipad-selected.png');
+	expect(single.filename).toBe('DRAFT-sample-garden-2064x2752-03.png');
+	expect(pngDimensions(single.bytes)).toEqual({ width: 2064, height: 2752 });
+	const sheet = await exportFile(page, testInfo, 'Draft contact sheet', 'contact-sheet.png');
+	expect(sheet.filename).toBe('DRAFT-sample-garden-2064x2752-contact-sheet.png');
+	const dimensions = pngDimensions(sheet.bytes);
+	expect(dimensions.width).toBeGreaterThan(dimensions.height);
+	expect(dimensions.width).toBeGreaterThan(2000);
+	expect(sheet.bytes.length).toBeGreaterThan(50_000);
+});
+
+test('guards missing screenshots and reports invalid uploads without losing work', async ({
+	page
+}) => {
+	await openStudio(page);
+	await page.getByRole('button', { name: 'New campaign', exact: true }).click();
+	await page.getByRole('button', { name: 'Export set' }).click();
+	const dialog = page.getByRole('dialog');
+	await expect(dialog.getByText('has no capture', { exact: false })).toBeVisible();
+	await expect(dialog.getByRole('button', { name: 'Download screenshot set' })).toBeDisabled();
+	await expect(dialog.getByRole('button', { name: 'Draft PNG' })).toBeDisabled();
+	await expect(dialog.getByRole('button', { name: 'Draft contact sheet' })).toBeDisabled();
+	await dialog.getByRole('button', { name: 'Close export dialog' }).click();
+	await page.getByLabel('Upload screenshots', { exact: true }).setInputFiles({
+		name: 'notes.txt',
+		mimeType: 'text/plain',
+		buffer: Buffer.from('Not an image')
+	});
+	await expect(page.getByRole('alert')).toContainText('Choose a PNG, JPG, or WebP screenshot.');
+	await page.getByRole('button', { name: 'Dismiss error' }).click();
+	await page.getByLabel('Open Appshot project').setInputFiles({
+		name: 'invalid.appshot.json',
+		mimeType: 'application/json',
+		buffer: Buffer.from('{"version":99}')
+	});
+	await expect(page.getByRole('alert')).toContainText('project version 99');
+	await expect(page.getByLabel('Campaign name')).toHaveValue('Untitled campaign');
+	await expect(frames(page)).toHaveCount(1);
+	await page.getByRole('button', { name: 'Dismiss error' }).click();
+	await page.getByLabel('Upload screenshots', { exact: true }).setInputFiles(fixture('today'));
+	await page.getByRole('button', { name: 'Export set' }).click();
+	await expect(dialog.getByRole('button', { name: 'Download screenshot set' })).toBeDisabled();
+	await expect(dialog.getByText('medium is required', { exact: false })).toBeVisible();
+	await expect(dialog.getByRole('button', { name: 'Draft PNG' })).toBeEnabled();
+});
+
+test('exports one image across a connected pair with a blank neighboring frame', async ({
+	page
+}, testInfo) => {
+	await openStudio(page);
+	await page.getByRole('button', { name: 'New campaign', exact: true }).click();
+	await page.getByLabel('Upload screenshots', { exact: true }).setInputFiles(fixture('today'));
+	await expect(page.locator('.studio')).not.toHaveClass(/loading/);
+	await page.getByRole('button', { name: 'Add blank screenshot' }).click();
+	await expect(frames(page)).toHaveCount(2);
+	await page.getByRole('button', { name: 'Select screenshot 1', exact: true }).click();
+	await page.getByRole('switch', { name: 'Connect adjacent screenshots' }).click();
+	await page.getByRole('button', { name: 'Select screenshot 2', exact: true }).click();
+	await expect(page.getByRole('switch', { name: 'Connect adjacent screenshots' })).toBeChecked();
+	const exported = await exportFile(page, testInfo, 'Download draft set', 'connected-pair.zip');
+	const entries = zipEntries(exported.bytes);
+	const pngs = [...entries.entries()].filter(([name]) => name.endsWith('.png'));
+	expect(pngs).toHaveLength(2);
+	for (const [, bytes] of pngs) expect(pngDimensions(bytes)).toEqual({ width: 1320, height: 2868 });
+	const project = JSON.parse(entries.get('project.json')!.toString()) as ProjectV2;
+	expect(composition(project).slides[1].primaryImage).toBeUndefined();
+	expect(composition(project).panorama?.image.blobUrl).toMatch(/^data:image\/png;base64,/);
+});
+
+test('normalizes differing frame treatments when linking and keeps paired edits consistent', async ({
+	page
+}, testInfo) => {
+	await openStudio(page);
+	await page.getByRole('button', { name: 'Select screenshot 3', exact: true }).click();
+	await page.getByRole('button', { name: 'Composition', exact: true }).click();
+	await page.getByLabel('Device frame', { exact: true }).selectOption('clay');
+	await page.getByLabel('Background fill').selectOption('radial');
+	await page.getByLabel('Shadow', { exact: true }).selectOption('none');
+	await page.getByRole('switch', { name: 'Connect adjacent screenshots' }).click();
+	await page.getByRole('button', { name: 'Select screenshot 4', exact: true }).click();
+	await expect(page.getByLabel('Device frame', { exact: true })).toHaveValue('clay');
+	await expect(page.getByLabel('Background fill')).toHaveValue('radial');
+	await expect(page.getByLabel('Shadow', { exact: true })).toHaveValue('none');
+	await page.getByLabel('Device frame', { exact: true }).selectOption('wireframe');
+	await page.getByLabel('Background fill').selectOption('linear');
+	await page.getByRole('button', { name: 'Select screenshot 3', exact: true }).click();
+	await expect(page.getByLabel('Device frame', { exact: true })).toHaveValue('wireframe');
+	await expect(page.getByLabel('Background fill')).toHaveValue('linear');
+	const saved = await saveProjectFile(page, testInfo, 'paired-treatments.appshot.json');
+	const slides = composition(saved.project).slides;
+	expect(slides[2].frame).toBe(slides[3].frame);
+	expect(slides[2].background).toEqual(slides[3].background);
+	expect(slides[2].effects).toEqual(slides[3].effects);
+});
+
+test('keeps editing and export controls usable at a 390px viewport', async ({ page }, testInfo) => {
+	await page.setViewportSize({ width: 390, height: 844 });
+	await openStudio(page);
+	expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+	await page.getByLabel('Campaign name').fill('Mobile campaign');
+	await page.getByLabel('Campaign name').press('Tab');
+	await page.getByLabel('Headline', { exact: false }).fill('A story for small screens.');
+	await page.getByRole('button', { name: 'Apply Soft serve style' }).click();
+	await expect(page.getByRole('button', { name: 'Apply Soft serve style' })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	await page.getByRole('button', { name: 'Export set' }).click();
+	await expect(page.getByRole('dialog')).toBeVisible();
+	const box = await page.getByRole('dialog').boundingBox();
+	expect(box).not.toBeNull();
+	expect(box!.x).toBeGreaterThanOrEqual(0);
+	expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+	await expect(
+		page.getByRole('dialog').getByRole('button', { name: 'Download screenshot set' })
+	).toBeDisabled();
+	await expect(
+		page.getByRole('dialog').getByRole('button', { name: 'Draft PNG', exact: true })
+	).toBeEnabled();
+	await page.screenshot({
+		path: await artifactPath(testInfo, 'studio-mobile-export.png'),
+		fullPage: true
+	});
+	await page.getByRole('button', { name: 'Close export dialog' }).click();
+	await expect(page.getByLabel('Headline', { exact: false })).toHaveValue(
+		'A story for small screens.'
+	);
+});
+
+test('uploading unchanged sample bytes keeps the sample warning after reload', async ({
+	page
+}, testInfo) => {
+	await openStudio(page);
+	await page.getByRole('button', { name: 'New campaign', exact: true }).click();
+	await page.getByLabel('Upload screenshots', { exact: true }).setInputFiles({
+		name: 'my-image.png',
+		mimeType: 'image/png',
+		buffer: await readFile(fixture('today'))
+	});
+	await expect(page.locator('.source-findings')).toContainText("Appshot's bundled samples");
+	const saved = await saveProjectFile(page, testInfo);
+	expect(Object.values(saved.project.assets)[0].provenance?.tool).toBe('appshot-sample');
+	await page.reload();
+	await expect(page.locator('.studio')).not.toHaveClass(/loading/);
+	await expect(page.locator('.source-findings')).toContainText("Appshot's bundled samples");
+	await page.getByRole('button', { name: 'Export set', exact: true }).click();
+	await expect(page.locator('.export-findings')).toContainText("Appshot's bundled samples");
+	await expect(page.getByRole('button', { name: 'Download screenshot set' })).toBeDisabled();
+});
+
+test.describe('sample images from older builds', () => {
+	const RETIRED = /older Appshot sample images.*no longer bundled.*embedded images/;
+
+	test('a project file that names one is refused with a reason, and the campaign stays', async ({
+		page
+	}, testInfo) => {
+		await openStudio(page);
+		const saved = await saveProjectFile(page, testInfo);
+		const v2 = structuredClone(saved.project);
+		const [first] = Object.values(v2.assets);
+		first.url = '/demo/old-sample.png';
+		first.byteLength = 0;
+		const v1 = composition(saved.project);
+		v1.slides[0].primaryImage!.blobUrl = '/brand/old-mark.png';
+		for (const [name, project] of [
+			['retired-v2.appshot.json', v2],
+			['retired-v1.appshot.json', v1]
+		] as const) {
+			await page.getByLabel('Open Appshot project').setInputFiles({
+				name,
+				mimeType: 'application/json',
+				buffer: Buffer.from(JSON.stringify(project))
+			});
+			await expect(page.getByRole('alert')).toContainText(RETIRED);
+			await page.getByRole('button', { name: 'Dismiss error' }).click();
+		}
+		await expect(page.getByLabel('Campaign name')).toHaveValue('Sample Garden');
+		await expect(frames(page)).toHaveCount(5);
+	});
+
+	test('an autosave that names one is kept and downloadable, and the first run still works', async ({
+		page
+	}, testInfo) => {
+		const raw = serializeStoredProject(createDemoProjectV2()).replace(
+			'/sample/today.png',
+			'/demo/old-sample.png'
+		);
+		await openStudio(page);
+		await page.evaluate(async (document) => {
+			const db = await new Promise<IDBDatabase>((resolve, reject) => {
+				const request = indexedDB.open('appshot-campaigns');
+				request.onsuccess = () => resolve(request.result);
+				request.onerror = () => reject(request.error);
+			});
+			await new Promise<void>((resolve, reject) => {
+				const transaction = db.transaction(['campaigns', 'meta'], 'readwrite');
+				transaction.objectStore('campaigns').put({
+					id: 'old',
+					schema: 2,
+					revision: 3,
+					updatedAt: Date.now(),
+					lastWriter: { instance: 'older-build', seq: 1 },
+					title: 'Old campaign',
+					frames: 5,
+					targets: 1,
+					document
+				});
+				transaction.objectStore('meta').put('old', 'active');
+				transaction.oncomplete = () => resolve();
+				transaction.onerror = () => reject(transaction.error);
+			});
+			db.close();
+		}, raw);
+		await page.reload();
+		await expect(page.locator('.studio')).not.toHaveClass(/loading/);
+		await expect(page.getByRole('status')).toContainText(RETIRED);
+		// The sample campaign takes over, ready to edit, rather than a broken or empty page.
+		await expect(page.getByLabel('Campaign name')).toHaveValue('Sample Garden');
+		await expect(frames(page)).toHaveCount(5);
+		await page.getByRole('button', { name: 'Recent campaigns' }).click();
+		const row = page.locator('.recovery-dialog article').filter({ hasText: 'Old campaign' });
+		await expect(row).toContainText('Saved data could not be opened');
+		await expect(row).toContainText(RETIRED);
+		await expect(row.getByRole('button', { name: 'Open', exact: false })).toHaveCount(0);
+		const pending = page.waitForEvent('download');
+		await row.getByRole('button', { name: 'Download' }).click();
+		const download = await pending;
+		const file = await artifactPath(testInfo, 'kept.json');
+		await download.saveAs(file);
+		expect(await readFile(file, 'utf8')).toBe(raw);
+		await page.getByRole('button', { name: 'Close recent campaigns' }).click();
+		await page.getByLabel('Headline', { exact: false }).fill('New work.');
+		await expect(page.locator('.save-status')).toHaveText('All changes saved');
+		await page.reload();
+		await expect(page.locator('.studio')).not.toHaveClass(/loading/);
+		await expect(page.getByLabel('Headline', { exact: false })).toHaveValue('New work.');
+	});
+
+	for (const style of ['the-check', 'table-linen'] as const) {
+		test(`a ${style} project with its images embedded still opens and exports`, async ({
+			page,
+			browser
+		}, testInfo) => {
+			const image = await readFile(fixture('journal'));
+			const embedded = {
+				id: 'older-capture',
+				blobUrl: `data:image/png;base64,${image.toString('base64')}`,
+				naturalWidth: 1320,
+				naturalHeight: 2868
+			};
+			const older = createDemo();
+			older.name = 'Older campaign';
+			older.style = style;
+			older.continuityMode = 'none';
+			older.panorama = undefined;
+			older.slides = older.slides.map((slide) => ({
+				...slide,
+				primaryImage: embedded,
+				...(style === 'table-linen'
+					? {
+							linen: {
+								...defaultLinenSettings('teal'),
+								// Colors an older build saved. They stay as stored.
+								colors: {
+									...defaultLinenSettings('teal').colors,
+									canvas: '#2B6F64',
+									dot: '#C99A3F'
+								}
+							}
+						}
+					: {})
+			}));
+			await openStudio(page);
+			await page.getByLabel('Open Appshot project').setInputFiles({
+				name: 'older.appshot.json',
+				mimeType: 'application/json',
+				buffer: Buffer.from(JSON.stringify(older))
+			});
+			await expect(page.getByLabel('Campaign name')).toHaveValue('Older campaign');
+			await expect(frames(page)).toHaveCount(5);
+			await expect(
+				page.getByRole('button', {
+					name: `Apply ${style === 'the-check' ? 'The Check' : 'Table Linen'} style`
+				})
+			).toHaveAttribute('aria-pressed', 'true');
+			if (style === 'table-linen')
+				await expect(page.getByLabel('Canvas color')).toHaveValue('#2b6f64');
+			const exported = await exportFile(page, testInfo, 'Draft PNG', `older-${style}.png`);
+			expect(pngDimensions(exported.bytes)).toEqual({ width: 1320, height: 2868 });
+			// A browser that never saw this project needs nothing bundled to reopen it.
+			const clean = await browser.newContext();
+			try {
+				await clean.route('**/sample/*.png', (route) => route.abort());
+				const reopened = await clean.newPage();
+				await reopened.goto(page.url());
+				await expect(reopened.locator('.studio')).not.toHaveClass(/loading/);
+				await reopened.getByLabel('Open Appshot project').setInputFiles({
+					name: 'older.appshot.json',
+					mimeType: 'application/json',
+					buffer: Buffer.from(JSON.stringify(older))
+				});
+				await expect(reopened.getByLabel('Campaign name')).toHaveValue('Older campaign');
+				await expect(reopened.getByRole('alert')).toHaveCount(0);
+			} finally {
+				await clean.close();
+			}
+		});
+	}
+});
