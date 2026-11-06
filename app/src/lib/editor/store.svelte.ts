@@ -163,6 +163,11 @@ export class EditorStore<D extends EditorDocument> {
 		return undefined;
 	}
 
+	/** The furthest matching redo state, before a new command clears that branch. */
+	findRedoDocument(matches: (document: D) => boolean): D | undefined {
+		return this.#future.find((entry) => matches(entry.project))?.project;
+	}
+
 	/** Change the edited frame. Selection alone is not an undo step, but it ends the open one. */
 	select(index: number): void {
 		this.checkpoint();

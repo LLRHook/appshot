@@ -40,7 +40,9 @@
 					>
 					{#if item.kind === 'campaign'}<span
 							>{item.frames} frames · {item.targets} output sizes{item.origin
-								? ' · Recovered copy'
+								? item.origin === 'redo-copy'
+									? ' · Recovered redo version'
+									: ' · Recovered copy'
 								: ''}</span
 						>
 					{:else}<span class="recovery-reason"

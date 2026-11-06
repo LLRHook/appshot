@@ -17,8 +17,8 @@ async function openSavedCampaign(page: Page, title: string) {
 	await expect(page.locator('.save-status')).toHaveText('All changes saved');
 }
 
-async function readSavedCampaign(page: Page, title: string) {
-	return page.evaluate(async (title) => {
+async function readSavedCampaigns(page: Page) {
+	return page.evaluate(async () => {
 		const db = await new Promise<IDBDatabase>((resolve, reject) => {
 			const request = indexedDB.open('appshot-campaigns', 1);
 			request.onsuccess = () => resolve(request.result);
@@ -32,13 +32,17 @@ async function readSavedCampaign(page: Page, title: string) {
 				request.onsuccess = () => resolve(request.result);
 				request.onerror = () => reject(request.error);
 			});
-			const record = rows.find((row) => row.title === title);
-			if (!record) throw new Error(`Saved campaign not found: ${title}`);
-			return record;
+			return rows;
 		} finally {
 			db.close();
 		}
-	}, title);
+	});
+}
+
+async function readSavedCampaign(page: Page, title: string) {
+	const record = (await readSavedCampaigns(page)).find((row) => row.title === title);
+	if (!record) throw new Error(`Saved campaign not found: ${title}`);
+	return record;
 }
 
 async function syntheticCapture(page: Page, width: number, height: number) {
@@ -257,6 +261,72 @@ test('reopening an advanced campaign preserves undo entries even while another c
 		await other.close();
 	}
 });
+
+for (const redoOnly of [false, true]) {
+	test(`reopening keeps the latest redo-only edits in a saved copy (other campaign active: ${redoOnly})`, async ({
+		page,
+		context
+	}) => {
+		await ready(page);
+		await page.getByLabel('Campaign name').fill('Redo recovery original');
+		await page.getByLabel('Headline', { exact: false }).fill('Shared base');
+		await expect(page.locator('.save-status')).toHaveText('All changes saved');
+		const original = await readSavedCampaign(page, 'Redo recovery original');
+		const other = await context.newPage();
+		try {
+			await ready(other);
+			if (redoOnly) {
+				await other.getByRole('button', { name: 'New campaign', exact: true }).click();
+				await other.getByLabel('Campaign name').fill('Unrelated base');
+				await other.getByLabel('Campaign name').press('Tab');
+				await expect(other.locator('.save-status')).toHaveText('All changes saved');
+				await other.reload();
+				await expect(other.locator('.studio')).not.toHaveClass(/loading/);
+				await openSavedCampaign(other, 'Redo recovery original');
+			}
+			await page.getByLabel('Headline', { exact: false }).fill('Newer original from the other tab');
+			await expect(page.locator('.save-status')).toHaveText('All changes saved');
+			await expect(other.locator('.conflict-notice')).toBeVisible();
+			for (const text of ['First redo edit', 'Latest redo edit']) {
+				await other.getByLabel('Headline', { exact: false }).fill(text);
+				await other.getByLabel('Headline', { exact: false }).press('Tab');
+				await expect(other.locator('.save-status')).toHaveText('Save a project backup');
+			}
+			for (let step = 0; step < (redoOnly ? 3 : 2); step++)
+				await other.getByRole('button', { name: 'Undo', exact: true }).click();
+			if (redoOnly) await expect(other.getByLabel('Campaign name')).toHaveValue('Unrelated base');
+			else await expect(other.getByLabel('Headline', { exact: false })).toHaveValue('Shared base');
+			await openSavedCampaign(other, 'Redo recovery original');
+			const recovered = (await readSavedCampaigns(other)).find(
+				(row) => JSON.parse(row.document).slides[0].typography.headline === 'Latest redo edit'
+			);
+			expect(
+				recovered,
+				'Latest redo content must remain in a durable saved campaign'
+			).toBeDefined();
+			expect(recovered!.id).not.toBe(original.id);
+			await other.getByRole('button', { name: /^Recent campaigns/ }).click();
+			await other
+				.locator('.saved-list article')
+				.filter({ hasText: 'Recovered redo version' })
+				.getByRole('button', { name: 'Open', exact: true })
+				.click();
+			await expect(other.locator('.recovery-dialog')).not.toBeVisible();
+			await expect(other.getByLabel('Headline', { exact: false })).toHaveValue('Latest redo edit');
+			await expect(other.locator('.save-status')).toHaveText('All changes saved');
+			await other.reload();
+			await expect(other.locator('.studio')).not.toHaveClass(/loading/);
+			await expect(other.getByLabel('Headline', { exact: false })).toHaveValue('Latest redo edit');
+			await page.reload();
+			await expect(page.locator('.studio')).not.toHaveClass(/loading/);
+			await expect(page.getByLabel('Headline', { exact: false })).toHaveValue(
+				'Newer original from the other tab'
+			);
+		} finally {
+			await other.close();
+		}
+	});
+}
 
 test('opening a saved campaign without edits does not conflict with its editing tab', async ({
 	page,

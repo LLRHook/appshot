@@ -65,6 +65,7 @@ import {
 } from './campaign-persistence';
 import { type ProjectPersistence } from './persistence';
 import { EditorStore, type ApplyOptions } from './store.svelte';
+import { documentsEqual } from './equal';
 
 export type LibraryTab = 'styles' | 'assets';
 export type FilePicker = 'upload' | 'replace' | 'project';
@@ -500,10 +501,27 @@ export class StudioController {
 		if (id === 'the-check') {
 			// A style applies to the set. Reset the shared placement too, so outputs added later
 			// cannot inherit a previous style's tilt while the current output happens to be straight.
+			const pair = this.store.project.panorama;
+			const placement = { offset: 0, scale: 1, tilt: 0 };
 			let next: ProjectV2 = {
 				...this.store.project,
-				...(this.store.project.panorama
-					? { panorama: { ...this.store.project.panorama, offset: 0, scale: 1, tilt: 0 } }
+				...(pair
+					? {
+							panorama: {
+								...pair,
+								...placement,
+								...(pair.variants
+									? {
+											variants: Object.fromEntries(
+												Object.entries(pair.variants).map(([target, variant]) => [
+													target,
+													{ ...variant, ...placement }
+												])
+											)
+										}
+									: {})
+							}
+						}
 					: {}),
 				slides: this.store.project.slides.map((slide) => ({ ...slide, tilt: 0, scale: 1 }))
 			};
@@ -991,13 +1009,23 @@ export class StudioController {
 					(document) => this.campaigns!.campaignIdOf(document) === id
 				);
 				if (!older) return;
+				const redo = this.store.findRedoDocument(
+					(document) => this.campaigns!.campaignIdOf(document) === id
+				);
 				const copy = this.campaigns!.keepAsCopy(older);
+				// Opening a document normally clears redo. Save its latest version separately so
+				// undoing to the working copy later cannot overwrite those recovered redo edits.
+				const redoCopy =
+					redo && !documentsEqual(older, redo)
+						? this.campaigns!.keepAsCopy(redo, 'redo-copy')
+						: undefined;
 				this.store.remapDocuments((document) =>
 					this.campaigns!.campaignIdOf(document) === id
 						? { ...document, campaignId: copy.campaignId }
 						: document
 				);
 				await this.campaigns!.save(copy);
+				if (redoCopy) await this.campaigns!.save(redoCopy);
 				await this.store.flush();
 				preserved = true;
 			});
@@ -1005,7 +1033,7 @@ export class StudioController {
 				this.recoveryOpen = false;
 				this.notify(
 					preserved
-						? 'Saved campaign opened. Your earlier edits are kept as a separate campaign.'
+						? 'Saved campaign opened. Your earlier work is saved in Recent campaigns.'
 						: 'Saved campaign opened.'
 				);
 			}

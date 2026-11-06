@@ -127,6 +127,21 @@ describe('StudioController commands through the store', () => {
 		expect(studio.composition.panorama).toMatchObject({ tilt: 0, scale: 1, offset: 0 });
 	});
 
+	it('The Check resets retained per-output pair placement before a removed capture is rebound', () => {
+		const studio = studioWith();
+		studio.toggleLink();
+		studio.store.select(2);
+		studio.toggleLink();
+		studio.setPanorama('tilt', -5);
+		studio.setPanorama('scale', 1.2);
+		studio.setPanorama('offset', 50);
+		studio.removeAsset(studio.displayedImage!.id);
+		expect(studio.composition.panorama).toBeUndefined();
+		studio.chooseStyle('the-check');
+		studio.useAsset(studio.assets[0]);
+		expect(studio.composition.panorama).toMatchObject({ tilt: 0, scale: 1, offset: 0 });
+	});
+
 	it('records a first pair binding’s draft reason on the pair instead of the hidden slide source', () => {
 		const studio = studioWith();
 		studio.chooseDevice('ipad-13');

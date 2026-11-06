@@ -49,7 +49,11 @@ const CHANNEL_NAME = 'appshot-campaigns';
 /** Enough for a long session with coalesced edits. Steps share every unchanged part of a document. */
 export const CAMPAIGN_HISTORY_LIMIT = 100;
 
-export type CampaignOriginKind = 'legacy-autosave' | 'conflict-copy' | 'recovered-edit';
+export type CampaignOriginKind =
+	| 'legacy-autosave'
+	| 'conflict-copy'
+	| 'recovered-edit'
+	| 'redo-copy';
 
 interface CampaignOrigin {
 	kind: CampaignOriginKind;
@@ -909,11 +913,14 @@ export class CampaignPersistence implements ProjectPersistence<ProjectV2> {
 	 * current document and its matching undo/redo entries, then flush the new document. No redirect
 	 * remains: opening the original later must continue writing to the original.
 	 */
-	keepAsCopy(document: ProjectV2): ProjectV2 {
+	keepAsCopy(
+		document: ProjectV2,
+		kind: 'conflict-copy' | 'redo-copy' = 'conflict-copy'
+	): ProjectV2 {
 		const copy = crypto.randomUUID();
 		const previous = this.#slotOf(document);
 		const next = { ...document, campaignId: copy };
-		this.#origins.set(copy, { kind: 'conflict-copy', of: previous });
+		this.#origins.set(copy, { kind, of: previous });
 		// Journal the copy before dropping the old entry, so no moment leaves these edits unprotected.
 		this.journal(next);
 		storageRemove(local, journalKey(this.#instance, previous));
