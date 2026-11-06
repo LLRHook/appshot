@@ -230,7 +230,11 @@ function frameBinding(
 ): { assetId?: AssetId; binding?: SourceBinding } {
 	const slide = composition.slides[slideIndex];
 	const { panorama } = composition;
-	if (panorama && (panorama.leftId === slide.id || panorama.rightId === slide.id))
+	if (
+		composition.continuityMode === 'paired' &&
+		panorama &&
+		(panorama.leftId === slide.id || panorama.rightId === slide.id)
+	)
 		return {
 			assetId: panorama.image.id,
 			binding: project.panorama?.variants?.[targetId]?.source

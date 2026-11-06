@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_PROJECT_BYTES } from '$lib/model/limits';
 import { createDemo } from '$lib/model/studio';
+import { STYLES } from '$lib/model/studio';
+import { projectForTarget } from '$lib/model/targets';
 import type { ProjectV2 } from '$lib/model/contracts';
 import { legacyPersistence, type ProjectPersistence } from './persistence';
 import { StudioController, isTextEntry } from './studio.svelte';
@@ -78,6 +80,73 @@ describe('StudioController undo grouping', () => {
 });
 
 describe('StudioController commands through the store', () => {
+	it.each(STYLES.filter((style) => style.id !== 'table-linen' && style.id !== 'the-check'))(
+		'G-15: a new $name frame keeps the selected background',
+		(style) => {
+			const studio = studioWith();
+			studio.chooseStyle(style.id);
+			studio.addSlide();
+			expect(studio.slide.background.colors).toEqual([style.background]);
+		}
+	);
+
+	it('G-15: a new The Check frame is frameless and has its own settings', () => {
+		const studio = studioWith();
+		studio.chooseStyle('the-check');
+		studio.addSlide();
+		expect(studio.slide).toMatchObject({
+			frame: 'none',
+			effects: { shadow: 'soft' },
+			tilt: 0,
+			scale: 1
+		});
+		expect(studio.slide.check).toBeDefined();
+	});
+
+	it('The Check straightens panels on current outputs and outputs added later', () => {
+		const studio = studioWith();
+		studio.chooseDevice('ipad-13');
+		studio.chooseDevice('iphone-6.9');
+		studio.chooseStyle('the-check');
+		studio.chooseDevice('iphone-duo-inner-2007x2853');
+		for (const target of studio.store.project.targets)
+			for (const slide of projectForTarget(studio.store.project, target).slides)
+				expect(slide).toMatchObject({ tilt: 0, scale: 1 });
+	});
+
+	it('connecting The Check frames uses a straight panel and one canvas at the seam', () => {
+		const studio = studioWith();
+		studio.chooseStyle('the-check');
+		studio.toggleLink();
+		expect(studio.composition.panorama?.tilt).toBe(0);
+		expect(studio.composition.slides[1].check?.canvas).toBe(
+			studio.composition.slides[0].check?.canvas
+		);
+	});
+
+	it('G-27: duplicating the left frame keeps its pair and selects the new frame after it', () => {
+		const studio = studioWith();
+		const pair = studio.composition.panorama;
+		studio.duplicate();
+		expect(studio.composition.panorama).toEqual(pair);
+		expect(studio.selected).toBe(2);
+		expect(studio.slide.id).not.toBe(pair?.leftId);
+	});
+
+	it('removing a library image unbinds every output and undo restores it', () => {
+		const studio = studioWith();
+		studio.toggleLink();
+		const before = studio.store.project;
+		const id = studio.displayedImage!.id;
+		studio.removeAsset(id);
+		expect(studio.store.project.assets).not.toHaveProperty(id);
+		const removed = projectForTarget(studio.store.project, studio.targetId);
+		expect(removed.panorama).toBeUndefined();
+		expect(removed.slides[0].primaryImage).toBeUndefined();
+		studio.store.undo();
+		expect(studio.store.project).toBe(before);
+	});
+
 	it('selects the moved, duplicated and added frames, and undo returns to the origin', () => {
 		const studio = studioWith();
 		studio.store.select(1);
@@ -238,10 +307,12 @@ describe('multi-target editor commands', () => {
 		});
 		const assets = studio.store.project.assets;
 		studio.duplicate();
-		expect(studio.store.project.slides[1].variants).toEqual(
+		expect(studio.store.project.slides[studio.selected].variants).toEqual(
 			studio.store.project.slides[0].variants
 		);
-		expect(studio.store.project.slides[1].id).not.toBe(studio.store.project.slides[0].id);
+		expect(studio.store.project.slides[studio.selected].id).not.toBe(
+			studio.store.project.slides[0].id
+		);
 		expect(studio.store.project.assets).toBe(assets);
 	});
 

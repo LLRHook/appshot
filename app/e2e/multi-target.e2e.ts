@@ -101,6 +101,115 @@ test('required output findings reveal the control that adds the missing display'
 	await expect(finding).toHaveCount(0);
 });
 
+test('library removal unbinds a screenshot and undo restores it', async ({ page }) => {
+	await ready(page);
+	await page.getByRole('switch', { name: 'Connect adjacent screenshots' }).click();
+	const original = await page.locator('.current-asset img').getAttribute('src');
+	await page.getByRole('button', { name: 'Screenshots', exact: true }).click();
+	await page
+		.getByRole('button', { name: 'Remove screenshot 1 from all outputs', exact: true })
+		.click();
+	await expect(page.locator('.current-asset img')).toHaveCount(0);
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(page.locator('.current-asset img')).toHaveAttribute('src', original!);
+});
+
+test('G-18: a batch places a capture on a visible frame instead of a pair’s hidden right source', async ({
+	page
+}) => {
+	await ready(page);
+	await page.getByRole('button', { name: 'New campaign', exact: true }).click();
+	await page.getByLabel('Upload screenshots', { exact: true }).setInputFiles({
+		name: 'first.png',
+		mimeType: 'image/png',
+		buffer: await syntheticCapture(page, 1320, 2868)
+	});
+	await page.getByRole('button', { name: 'Add blank screenshot', exact: true }).click();
+	await page.getByRole('button', { name: 'Select screenshot 1', exact: true }).click();
+	await page.getByRole('switch', { name: 'Connect adjacent screenshots' }).click();
+	await page.getByLabel('Upload screenshots', { exact: true }).setInputFiles({
+		name: 'second.png',
+		mimeType: 'image/png',
+		buffer: await syntheticCapture(page, 1290, 2796)
+	});
+	await expect(page.getByRole('button', { name: /^Select screenshot \d+$/ })).toHaveCount(3);
+	await page.getByRole('button', { name: 'Select screenshot 3', exact: true }).click();
+	await expect(page.locator('.current-asset img')).toBeVisible();
+	await expect(page.locator('.current-asset')).toContainText('1290 × 2796');
+});
+
+test('capture records and draft reasons survive Save and Open', async ({ page }) => {
+	await ready(page);
+	await page.getByRole('button', { name: 'New campaign', exact: true }).click();
+	const png = await syntheticCapture(page, 2064, 2752);
+	await page
+		.getByLabel('Upload screenshots', { exact: true })
+		.setInputFiles({ name: 'tablet.png', mimeType: 'image/png', buffer: png });
+	const record = page.locator('.source-record').first();
+	await record.locator('summary').click();
+	await page.getByLabel('Device for screenshot 1', { exact: true }).fill('iPad Pro 13');
+	await page.getByLabel('Device for screenshot 1', { exact: true }).press('Tab');
+	await page.getByLabel('OS version for screenshot 1', { exact: true }).fill('27.2');
+	await page.getByLabel('OS version for screenshot 1', { exact: true }).press('Tab');
+	await page.getByLabel('Fictional account data confirmed for screenshot 1').check();
+	await page
+		.getByLabel('Draft override reason for screenshot 1')
+		.fill('Exploring the composition before recapturing on iPhone');
+	await record.getByRole('button', { name: 'Use for draft' }).click();
+	await expect(page.locator('.current-asset img')).toBeVisible();
+	await expect(page.locator('.save-status')).toHaveText('All changes saved');
+	const download = page.waitForEvent('download');
+	await page.getByRole('button', { name: 'Save project', exact: true }).click();
+	const file = await download;
+	await page.getByLabel('Open Appshot project').setInputFiles((await file.path())!);
+	await expect(page.locator('.save-status')).toHaveText('All changes saved');
+	await expect(page.locator('.current-asset img')).toBeVisible();
+	const reopenedRecord = page.locator('.source-record').first();
+	await reopenedRecord.locator('summary').click();
+	await expect(page.getByLabel('Device for screenshot 1', { exact: true })).toHaveValue(
+		'iPad Pro 13'
+	);
+	await expect(page.getByLabel('OS version for screenshot 1', { exact: true })).toHaveValue('27.2');
+	await expect(page.getByLabel('Fictional account data confirmed for screenshot 1')).toBeChecked();
+	await page.getByRole('button', { name: 'Export set', exact: true }).click();
+	await expect(page.locator('.export-findings')).toContainText('accepted for drafts only');
+	await expect(page.getByRole('button', { name: 'Download screenshot set' })).toBeDisabled();
+});
+
+test('deleting a saved campaign requires a second click and leaves the active one', async ({
+	page
+}) => {
+	await ready(page);
+	await page.getByLabel('Campaign name').fill('Discard this saved campaign');
+	await page.getByLabel('Campaign name').press('Tab');
+	await expect(page.locator('.save-status')).toHaveText('All changes saved');
+	await page.getByRole('button', { name: 'New campaign', exact: true }).click();
+	await expect(page.locator('.save-status')).toHaveText('All changes saved');
+	await page.getByRole('button', { name: /^Recent campaigns/ }).click();
+	const row = page
+		.locator('.saved-list article')
+		.filter({ hasText: 'Discard this saved campaign' });
+	await row
+		.getByRole('button', { name: 'Delete saved campaign Discard this saved campaign' })
+		.click();
+	await expect(row).toHaveCount(1);
+	await row.getByRole('button', { name: 'Delete permanently', exact: true }).click();
+	await expect(row).toHaveCount(0);
+	await expect(page.locator('.saved-list article')).toHaveCount(1);
+});
+
+test('G-29: rejected phone bounds restore the value shown by the editor', async ({ page }) => {
+	await ready(page);
+	await page.getByRole('button', { name: 'Apply Table Linen style' }).click();
+	await page.getByRole('button', { name: 'Composition', exact: true }).click();
+	const top = page.locator('#phone-top');
+	const before = await top.inputValue();
+	await top.fill('2860');
+	await top.press('Tab');
+	await expect(top).toHaveValue(before);
+	await expect(page.getByRole('alert')).toContainText(/top|bottom|height/i);
+});
+
 test('outputs keep separate captures and share copy', async ({ page }) => {
 	await ready(page);
 	const original = await page.locator('.current-asset img').getAttribute('src');
@@ -115,18 +224,21 @@ test('outputs keep separate captures and share copy', async ({ page }) => {
 	);
 });
 
-test('a batch keeps its valid capture and names a corrupt file', async ({ page }) => {
+test('G-18: a batch keeps its valid capture and names a corrupt or mislabelled file', async ({
+	page
+}) => {
 	await ready(page);
 	const png = await syntheticCapture(page, 1206, 2622);
 	await page.getByLabel('Active output').selectOption('iphone-di-medium-1206x2622');
 	await page.getByLabel('Upload screenshots', { exact: true }).setInputFiles([
-		{ name: '01-medium.png', mimeType: 'image/png', buffer: png },
+		{ name: '01-medium.jpg', mimeType: 'image/jpeg', buffer: png },
 		{ name: '02-broken.png', mimeType: 'image/png', buffer: Buffer.from('not an image') }
 	]);
 	await expect(page.locator('.studio')).not.toHaveClass(/loading/);
 	await expect(page.locator('.current-asset img')).toHaveCount(1);
 	await expect(page.locator('.current-asset')).toContainText('1206 × 2622');
 	await expect(page.locator('.error-notice')).toContainText('02-broken.png');
+	await expect(page.locator('.error-notice')).toContainText('01-medium.jpg is really a PNG');
 	await expect(page.locator('.target-row.active')).toContainText('1/5 captures');
 	await page.getByRole('button', { name: 'Dismiss error' }).click();
 	await page.getByLabel('Active output').selectOption('iphone-6.9');
@@ -174,15 +286,78 @@ test('two tabs preserve both edits through the conflict-copy action', async ({ p
 		await other.getByRole('button', { name: 'Keep my edits as a copy' }).click();
 		await expect(other.locator('.save-status')).toHaveText('All changes saved');
 		await expect(other.locator('.conflict-notice')).toHaveCount(0);
+		await other.evaluate(() => {
+			const channel = new BroadcastChannel('appshot-campaigns');
+			channel.onmessage = () => {
+				document.body.dataset.laterCampaignSave = 'received';
+				channel.close();
+			};
+		});
+		await page.getByLabel('Headline', { exact: false }).fill('Original saved again');
+		await expect(page.locator('.save-status')).toHaveText('All changes saved');
+		await expect(other.locator('body')).toHaveAttribute('data-later-campaign-save', 'received');
+		await expect(other.locator('.conflict-notice')).toHaveCount(0);
 		await page.reload();
 		await expect(page.locator('.studio')).not.toHaveClass(/loading/);
-		await expect(page.getByLabel('Headline', { exact: false })).toHaveValue(
-			'Kept in the original campaign'
-		);
+		await expect(page.getByLabel('Headline', { exact: false })).toHaveValue('Original saved again');
 		await other.reload();
 		await expect(other.locator('.studio')).not.toHaveClass(/loading/);
 		await expect(other.getByLabel('Headline', { exact: false })).toHaveValue(
 			'Kept as a separate copy'
+		);
+	} finally {
+		await other.close();
+	}
+});
+
+test('opening the original after keeping a conflict copy preserves both campaigns through undo', async ({
+	page,
+	context
+}) => {
+	await ready(page);
+	await page.getByLabel('Campaign name').fill('Original conflict campaign');
+	await page.getByLabel('Headline', { exact: false }).fill('Shared starting point');
+	await expect(page.locator('.save-status')).toHaveText('All changes saved');
+	const other = await context.newPage();
+	try {
+		await ready(other);
+		await page.getByLabel('Headline', { exact: false }).fill('Original version');
+		await expect(page.locator('.save-status')).toHaveText('All changes saved');
+		await expect(other.locator('.conflict-notice')).toBeVisible();
+		await other.getByLabel('Headline', { exact: false }).fill('Preserved copy version');
+		await other.getByRole('button', { name: 'Keep my edits as a copy' }).click();
+		await expect(other.locator('.save-status')).toHaveText('All changes saved');
+		await other.getByLabel('Campaign name').fill('Preserved conflict copy');
+		await other.getByLabel('Campaign name').press('Tab');
+		await expect(other.locator('.save-status')).toHaveText('All changes saved');
+
+		const openCampaign = async (title: string) => {
+			await other.getByRole('button', { name: /^Recent campaigns/ }).click();
+			const row = other.locator('.saved-list article').filter({ hasText: title });
+			await expect(row).toHaveCount(1);
+			await row.getByRole('button', { name: 'Open', exact: true }).click();
+			await expect(other.locator('.save-status')).toHaveText('All changes saved');
+		};
+		await openCampaign('Original conflict campaign');
+		await expect(other.getByLabel('Headline', { exact: false })).toHaveValue('Original version');
+		await openCampaign('Preserved conflict copy');
+		await expect(other.getByLabel('Headline', { exact: false })).toHaveValue(
+			'Preserved copy version'
+		);
+		await other.getByRole('button', { name: 'Undo', exact: true }).click();
+		await expect(other.getByLabel('Headline', { exact: false })).toHaveValue('Original version');
+		await other.getByRole('button', { name: 'Undo', exact: true }).click();
+		await expect(other.getByLabel('Headline', { exact: false })).toHaveValue(
+			'Preserved copy version'
+		);
+		await expect(other.locator('.save-status')).toHaveText('All changes saved');
+		await page.reload();
+		await expect(page.locator('.studio')).not.toHaveClass(/loading/);
+		await expect(page.getByLabel('Headline', { exact: false })).toHaveValue('Original version');
+		await other.reload();
+		await expect(other.locator('.studio')).not.toHaveClass(/loading/);
+		await expect(other.getByLabel('Headline', { exact: false })).toHaveValue(
+			'Preserved copy version'
 		);
 	} finally {
 		await other.close();

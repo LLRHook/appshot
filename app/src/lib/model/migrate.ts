@@ -97,7 +97,8 @@ export function migrateCompositionToV2(composition: Composition): ProjectV2 {
 			byteLength: isBundledImageUrl(ref.blobUrl) ? 0 : dataUrlByteLength(ref.blobUrl),
 			url: ref.blobUrl,
 			naturalWidth: ref.naturalWidth,
-			naturalHeight: ref.naturalHeight
+			naturalHeight: ref.naturalHeight,
+			...(ref.blobUrl.startsWith('/demo/') ? { provenance: { tool: 'appshot-sample' } } : {})
 		});
 		return unique;
 	}
@@ -224,7 +225,14 @@ function parseAsset(value: unknown, key: string, form: AssetForm): ProjectAsset 
 		naturalWidth,
 		naturalHeight,
 		...(name !== undefined ? { name } : {}),
-		...(asset.provenance !== undefined ? { provenance: parseProvenance(asset.provenance) } : {})
+		...(asset.provenance !== undefined || url.startsWith('/demo/')
+			? {
+					provenance: {
+						...(asset.provenance !== undefined ? parseProvenance(asset.provenance) : {}),
+						...(url.startsWith('/demo/') ? { tool: 'appshot-sample' } : {})
+					}
+				}
+			: {})
 	};
 }
 

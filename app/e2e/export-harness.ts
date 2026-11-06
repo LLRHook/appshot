@@ -273,6 +273,7 @@ export async function runExport(
 	const result = await exportMatrix(required(key), {
 		...(options.targets ? { targets: options.targets } : {}),
 		scope: options.scope ?? 'store',
+		portableProject: (project) => new CampaignPersistence().exportPortable(project),
 		onProgress: ({ done }) => {
 			progress = done;
 			peakHeap = Math.max(peakHeap, heap());

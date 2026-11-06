@@ -6,7 +6,7 @@
 	import { download } from '$lib/model/project';
 	import { exportContactSheet, exportMatrix, exportSlide } from '$lib/render/export';
 	import { hasBlockingIssue, preflight } from '$lib/render/preflight';
-	import type { DeviceId } from '$lib/model/devices';
+	import { SPEC_SOURCE, type DeviceId } from '$lib/model/devices';
 
 	const studio = getStudio();
 	let busy = $state(false);
@@ -136,7 +136,7 @@
 					: await exportContactSheet(studio.composition);
 			download(
 				blob,
-				`DRAFT-${studio.filename}-${kind === 'one' ? `${String(studio.selected + 1).padStart(2, '0')}.png` : 'contact-sheet.png'}`
+				`DRAFT-${studio.filename}-${studio.device.width}x${studio.device.height}-${kind === 'one' ? `${String(studio.selected + 1).padStart(2, '0')}.png` : 'contact-sheet.png'}`
 			);
 			studio.notify('Draft preview saved. The App Store checklist remains separate.');
 			close();
@@ -236,6 +236,13 @@
 				</div>
 			</details>{/if}
 		<p>File and layout checks do not establish App Review approval or verify product claims.</p>
+		<p>
+			Apple screenshot specification checked <a
+				href={SPEC_SOURCE.url}
+				target="_blank"
+				rel="external noreferrer">{SPEC_SOURCE.accessed}</a
+			>.
+		</p>
 	</section>
 	{#if studio.error}<p class="export-warning" role="alert">{studio.error}</p>{/if}
 	<button

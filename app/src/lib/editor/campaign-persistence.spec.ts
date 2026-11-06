@@ -84,6 +84,18 @@ describe('CampaignPersistence, the parts with no storage', () => {
 		expect(new CampaignPersistence().rejectReason(createDemoProjectV2())).toBeNull();
 	});
 
+	it('rejects image count overflow before committing an edit the parser cannot save', () => {
+		const demo = createDemoProjectV2();
+		const sample = Object.values(demo.assets)[0];
+		const assets = Object.fromEntries(
+			Array.from({ length: 301 }, (_, index) => [
+				`sample-${index}`,
+				{ ...sample, id: `sample-${index}` }
+			])
+		);
+		expect(new CampaignPersistence().rejectReason({ ...demo, assets })).toContain('300 images');
+	});
+
 	it('refuses an image that did not go through ingestion, so a save can never lose its bytes', () => {
 		const persistence = new CampaignPersistence();
 		expect(persistence.rejectReason(withAsset({}))).toMatch(/not been stored/);

@@ -5,10 +5,12 @@ import { sourceCompatibility } from '$lib/model/capture';
 import {
 	applyCheckPatch,
 	applyCheckStyle,
+	CHECK_PALETTES,
+	defaultCheckSettings,
 	resolveCheckSettings,
 	type CheckSettingsPatch
 } from '$lib/model/check';
-import type { ImageLayer, Issue, ProjectV2 } from '$lib/model/contracts';
+import type { CaptureProvenance, ImageLayer, Issue, ProjectV2 } from '$lib/model/contracts';
 import { MAX_ART_SCALE, MAX_SLIDE_LAYERS } from '$lib/model/limits';
 import {
 	addAssets,
@@ -17,6 +19,9 @@ import {
 	bindPanoramaSource,
 	duplicateSlide,
 	removeTarget,
+	removeAsset as removeProjectAsset,
+	patchPanoramaVariant,
+	setSourceOverride,
 	setAppName,
 	setWorkingTitle
 } from '$lib/model/edits';
@@ -52,6 +57,7 @@ import { createPreflight } from '$lib/render/preflight';
 import { projectTextFromFile, safeFilename } from '$lib/render/export';
 import {
 	CampaignConflictError,
+	CampaignValidationError,
 	CampaignPersistence,
 	CAMPAIGN_HISTORY_LIMIT,
 	type ExternalChange,
@@ -226,7 +232,11 @@ export class StudioController {
 						revision: error.storedRevision,
 						title: this.store.project.name
 					};
-				} else
+				} else if (error instanceof CampaignValidationError)
+					this.notify(
+						`This campaign could not be saved: ${error.message} Correct the value and try again.`
+					);
+				else
 					this.notify(
 						'Browser storage is full or unavailable. Save your project to keep your changes.'
 					);
@@ -460,8 +470,21 @@ export class StudioController {
 		const next = {
 			...createSlide(index, image),
 			device: this.composition.device,
+			background: { kind: 'solid' as const, colors: [this.direction.background] },
 			typography: { ...createSlide(0).typography, fontColor: this.direction.foreground }
 		};
+		if (this.isCheck) {
+			const check = defaultCheckSettings(index, index + 1);
+			const palette = CHECK_PALETTES[check.canvas];
+			return {
+				...next,
+				check,
+				frame: 'none',
+				effects: { shadow: 'soft', glow: 0 },
+				background: { kind: 'solid', colors: [palette.canvas] },
+				typography: { ...next.typography, fontColor: palette.headline, fontWeight: 400 }
+			};
+		}
 		return this.isLinen ? { ...next, linen: defaultLinenSettings('cream') } : next;
 	}
 
@@ -469,7 +492,15 @@ export class StudioController {
 		const project = this.composition;
 		const style = getStyle(id);
 		if (id === 'the-check') {
-			this.#commit(applyCheckStyle(project));
+			// A style applies to the set. Reset the shared placement too, so outputs added later
+			// cannot inherit a previous style's tilt while the current output happens to be straight.
+			let next: ProjectV2 = {
+				...this.store.project,
+				slides: this.store.project.slides.map((slide) => ({ ...slide, tilt: 0, scale: 1 }))
+			};
+			for (const target of next.targets)
+				next = applyProjectedEdit(next, target, applyCheckStyle(projectForTarget(next, target)));
+			this.#commitProject(next);
 			return;
 		}
 		if (id === 'table-linen') {
@@ -607,9 +638,9 @@ export class StudioController {
 
 	duplicate() {
 		if (this.composition.slides.length >= MAX_FRAMES) return;
-		this.#commitProject(duplicateSlide(this.store.project, this.slide.id, crypto.randomUUID()), {
-			select: this.selected + 1
-		});
+		const id = crypto.randomUUID();
+		const next = duplicateSlide(this.store.project, this.slide.id, id);
+		this.#commitProject(next, { select: next.slides.findIndex((slide) => slide.id === id) });
 	}
 
 	remove() {
@@ -637,7 +668,7 @@ export class StudioController {
 	}
 
 	toggleLink() {
-		const { composition: project, slide, selected, isLinen, linen } = this;
+		const { composition: project, slide, selected, isLinen, isCheck, linen } = this;
 		if (this.isLinked) {
 			this.#commit({ ...project, panorama: undefined, continuityMode: 'none' });
 			return;
@@ -657,7 +688,15 @@ export class StudioController {
 							frame: slide.frame,
 							layout: slide.layout,
 							background: slide.background,
-							effects: slide.effects
+							effects: slide.effects,
+							...(isCheck
+								? {
+										check: {
+											...resolveCheckSettings(project, selected + 1),
+											canvas: this.check.canvas
+										}
+									}
+								: {})
 						}
 					: s
 			),
@@ -668,7 +707,7 @@ export class StudioController {
 				image,
 				offset: 0,
 				scale: 1,
-				tilt: isLinen ? 0 : -14,
+				tilt: isLinen || isCheck ? 0 : -14,
 				...(isLinen ? { linenPhone: { ...linen.phone, centerX: LINEN_REFERENCE.width } } : {})
 			}
 		});
@@ -692,9 +731,9 @@ export class StudioController {
 		};
 	}
 
-	useAsset(image: ImageRef) {
+	useAsset(image: ImageRef, draftReason?: string) {
 		const compatibility = sourceCompatibility(image, this.device);
-		if (compatibility.severity === 'block') {
+		if (compatibility.severity === 'block' && !draftReason?.trim()) {
 			this.error = compatibility.message;
 			return;
 		}
@@ -706,7 +745,31 @@ export class StudioController {
 			(pair.leftId === this.slide.id || pair.rightId === this.slide.id)
 		)
 			next = bindPanoramaSource(next, this.targetId, image.id);
+		if (draftReason?.trim()) {
+			const reason = draftReason.trim().slice(0, 200);
+			next = this.isLinked
+				? patchPanoramaVariant(next, this.targetId, {
+						source: { asset: image.id, nonNative: { reason } }
+					})
+				: setSourceOverride(next, this.slide.id, this.targetId, reason);
+		}
 		this.#commitProject(next);
+	}
+
+	setCaptureProvenance(id: string, patch: Partial<CaptureProvenance>) {
+		const asset = this.store.project.assets[id];
+		if (!asset || this.processing) return;
+		const provenance = { ...asset.provenance, ...patch };
+		this.#commitProject({
+			...this.store.project,
+			assets: { ...this.store.project.assets, [id]: { ...asset, provenance } }
+		});
+	}
+
+	removeAsset(id: string) {
+		if (this.processing) return;
+		if (this.#commitProject(removeProjectAsset(this.store.project, id)))
+			this.notify('Screenshot removed from the library and all outputs. Undo restores it.');
 	}
 
 	async upload(files: FileList | null, replace = false) {
@@ -724,7 +787,12 @@ export class StudioController {
 				this.store.project,
 				batch.accepted.map((item) => item.asset)
 			);
-			const messages = batch.rejected.map((item) => item.message);
+			const messages = [
+				...batch.rejected.map((item) => item.message),
+				...batch.accepted.flatMap((item) =>
+					item.capture.notes.map((note) => `${item.capture.name}: ${note}`)
+				)
+			];
 			const images = batch.accepted.flatMap((item, index) => {
 				if (item.capture.compatibility?.severity === 'block') {
 					messages.push(
@@ -741,7 +809,13 @@ export class StudioController {
 				used = 1;
 			} else if (images.length) {
 				const slides = [...this.composition.slides];
-				const empty = slides.flatMap((slide, index) => (!slide.primaryImage ? [index] : []));
+				const pair =
+					this.composition.continuityMode === 'paired' ? this.composition.panorama : undefined;
+				const empty = slides.flatMap((slide, index) =>
+					!slide.primaryImage && slide.id !== pair?.leftId && slide.id !== pair?.rightId
+						? [index]
+						: []
+				);
 				if (images.length === 1 && empty.includes(this.selected))
 					empty.unshift(...empty.splice(empty.indexOf(this.selected), 1));
 				for (const image of images) {
@@ -766,11 +840,13 @@ export class StudioController {
 				(pair.leftId === this.slide.id || pair.rightId === this.slide.id)
 			)
 				next = bindPanoramaSource(next, this.targetId, images[0].id);
-			if (this.#commitProject(next) && batch.accepted.length)
+			const committed = this.#commitProject(next);
+			if (committed && batch.accepted.length)
 				this.notify(
 					`${used} capture${used === 1 ? '' : 's'} placed for ${this.device.label}. ${batch.accepted.length} added to the library.`
 				);
-			if (messages.length) this.error = messages.join(' ');
+			if (messages.length)
+				this.error = committed ? messages.join(' ') : `${this.error} The upload was not added.`;
 		} catch (e) {
 			this.error = e instanceof Error ? e.message : 'Could not read this image.';
 		} finally {
@@ -917,10 +993,29 @@ export class StudioController {
 			const item = this.recoverable.find((item) => item.id === id);
 			download(
 				await this.campaigns.exportRecoverable(id),
-				`${(item?.title ?? 'recovered-project').replace(/[^a-z0-9-]+/gi, '-')}.appshot.json`
+				`${safeFilename(item?.title ?? 'recovered-project')}.appshot.json`
 			);
 		} catch (error) {
 			this.error = error instanceof Error ? error.message : 'Could not download that saved data.';
+		}
+	}
+
+	async discardRecovery(id: string) {
+		if (
+			!this.campaigns ||
+			this.processing ||
+			id === this.campaigns.campaignIdOf(this.store.project)
+		)
+			return;
+		this.processing = true;
+		try {
+			await this.campaigns.discardRecoverable(id);
+			await this.refreshRecovery();
+			this.notify('Saved campaign deleted from this browser.');
+		} catch (error) {
+			this.error = error instanceof Error ? error.message : 'Could not delete that saved campaign.';
+		} finally {
+			this.processing = false;
 		}
 	}
 
@@ -928,8 +1023,15 @@ export class StudioController {
 		if (!this.campaigns || this.processing) return;
 		this.processing = true;
 		try {
-			this.campaigns.keepAsCopy(this.store.project);
-			await this.store.saveNow();
+			await this.store.flush();
+			const previous = this.campaigns.campaignIdOf(this.store.project);
+			const copy = this.campaigns.keepAsCopy(this.store.project);
+			this.store.remapDocuments((document) =>
+				this.campaigns!.campaignIdOf(document) === previous
+					? { ...document, campaignId: copy.campaignId }
+					: document
+			);
+			await this.store.flush();
 			if (this.store.status === 'saved') {
 				this.conflict = null;
 				this.notify(

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ToggleRow from '$lib/components/studio/ToggleRow.svelte';
+	import NumberField from '$lib/components/studio/NumberField.svelte';
 	import {
 		CHECK_PALETTES,
 		CHECK_PANEL_ANCHOR,
@@ -11,6 +12,7 @@
 		type CheckSettingsPatch
 	} from '$lib/model/check';
 	import type { ImageLayer, PixelRect, SourceDimensions } from '$lib/model/contracts';
+	import { MAX_IMAGE_SIDE } from '$lib/model/image';
 
 	/**
 	 * Frame controls for The Check. Self-contained: it reads settings through props and reports
@@ -102,7 +104,8 @@
 
 	function setRect(key: keyof PixelRect, value: number, min: number) {
 		if (!settings.mark || !Number.isFinite(value)) return;
-		const rect = { ...settings.mark.rect, [key]: Math.max(min, Math.round(value)) };
+		const max = key === 'x' || key === 'y' ? MAX_IMAGE_SIDE - 1 : MAX_IMAGE_SIDE;
+		const rect = { ...settings.mark.rect, [key]: Math.min(max, Math.max(min, Math.round(value))) };
 		patchMark({ rect }, `check.mark.${key}`);
 	}
 </script>
@@ -184,16 +187,17 @@
 		</select>
 		<div class="num-grid">
 			{#each RECT_FIELDS as field (field.key)}
-				<label class="num-field" for={`check-mark-${field.key}`}
-					>{field.label}<input
-						id={`check-mark-${field.key}`}
-						type="number"
-						step="1"
-						min={field.min}
-						value={mark.rect[field.key]}
-						onchange={(event) => setRect(field.key, Number(event.currentTarget.value), field.min)}
-					/></label
-				>
+				<NumberField
+					id={`check-mark-${field.key}`}
+					label={field.label}
+					step={1}
+					bounds={[
+						field.min,
+						field.key === 'x' || field.key === 'y' ? MAX_IMAGE_SIDE - 1 : MAX_IMAGE_SIDE
+					]}
+					value={mark.rect[field.key]}
+					apply={(value) => setRect(field.key, value, field.min)}
+				/>
 			{/each}
 		</div>
 		<p class="field-help">

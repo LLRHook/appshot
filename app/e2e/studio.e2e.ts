@@ -341,12 +341,13 @@ test('uploads real screenshots, connects frames, reorders, duplicates, deletes, 
 	await page.getByRole('button', { name: 'Duplicate screenshot', exact: true }).click();
 	await expect(frames(page)).toHaveCount(3);
 	await expect(page.getByLabel('Headline', { exact: false })).toHaveValue('Dinner with friends');
-	await page.getByRole('button', { name: 'Move screenshot right', exact: true }).click();
+	// The duplicate follows the intact pair. Moving it left then exercises breaking that pair.
+	await page.getByRole('button', { name: 'Move screenshot left', exact: true }).click();
 	const reordered = await saveProjectFile(page, testInfo, 'reordered.appshot.json');
 	expect(reordered.project.slides.map((slide) => slide.typography.headline)).toEqual([
 		'Dinner with friends',
-		'Scan the receipt',
-		'Dinner with friends'
+		'Dinner with friends',
+		'Scan the receipt'
 	]);
 	expect(new Set(reordered.project.slides.map((slide) => slide.id)).size).toBe(3);
 	expect(reordered.project.continuityMode).toBe('none');
@@ -466,10 +467,10 @@ test('exports the selected frame at an alternate size and a contact sheet', asyn
 	await expect(page.locator('.studio')).not.toHaveClass(/loading/);
 	await expect(page.locator('.target-row.active')).toContainText('5/5 captures');
 	const single = await exportFile(page, testInfo, 'Draft PNG', 'ipad-selected.png');
-	expect(single.filename).toBe('DRAFT-billington-03.png');
+	expect(single.filename).toBe('DRAFT-billington-2064x2752-03.png');
 	expect(pngDimensions(single.bytes)).toEqual({ width: 2064, height: 2752 });
 	const sheet = await exportFile(page, testInfo, 'Draft contact sheet', 'contact-sheet.png');
-	expect(sheet.filename).toBe('DRAFT-billington-contact-sheet.png');
+	expect(sheet.filename).toBe('DRAFT-billington-2064x2752-contact-sheet.png');
 	const dimensions = pngDimensions(sheet.bytes);
 	expect(dimensions.width).toBeGreaterThan(dimensions.height);
 	expect(dimensions.width).toBeGreaterThan(2000);

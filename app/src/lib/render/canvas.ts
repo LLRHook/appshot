@@ -276,11 +276,7 @@ function background(
 }
 
 function family(style: StyleId): string {
-	return style === 'paper'
-		? '"Instrument Serif", Georgia, serif'
-		: style === 'terminal'
-			? '"SFMono-Regular", Menlo, monospace'
-			: '"DM Sans", Arial, sans-serif';
+	return style === 'paper' ? '"Instrument Serif", Georgia, serif' : '"DM Sans", Arial, sans-serif';
 }
 function wrappedLines(ctx: Context, text: string, maxWidth: number): string[] {
 	const lines: string[] = [];

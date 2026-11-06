@@ -501,16 +501,29 @@ p {
 	grid-template-columns: repeat(2, 1fr);
 	gap: 10px;
 }
-.asset-grid button {
+.asset-tile {
+	display: grid;
+	gap: 4px;
+	min-width: 0;
+}
+.asset-grid .asset-choice {
 	background: #f1f2ec;
 	border: 1px solid #e0e4d7;
 	border-radius: 7px;
 	padding: 8px 8px 5px;
 	overflow: hidden;
 }
-.asset-grid button.selected-asset {
+.asset-grid .asset-choice.selected-asset {
 	border-color: #608047;
 	background: #e9efdb;
+}
+.asset-remove {
+	justify-self: end;
+	padding: 3px 2px;
+	border: 0;
+	background: transparent;
+	color: #6d5547;
+	font-size: 10px;
 }
 .asset-grid img {
 	width: 100%;

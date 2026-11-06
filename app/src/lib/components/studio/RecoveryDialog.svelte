@@ -3,6 +3,7 @@
 	import { getStudio } from '$lib/editor/studio.svelte';
 	const studio = getStudio();
 	let dialog = $state.raw<HTMLDialogElement>();
+	let deleting = $state<string | null>(null);
 	$effect(() => {
 		if (!dialog) return;
 		if (studio.recoveryOpen && !dialog.open) dialog.showModal();
@@ -56,6 +57,25 @@
 							onclick={() => void studio.openRecovery(item.id)}
 							>Open<Icon name="arrow" size={13} /></button
 						>{/if}
+					{#if deleting === item.id}
+						<button
+							class="button compact"
+							disabled={studio.processing}
+							onclick={() => {
+								deleting = null;
+								void studio.discardRecovery(item.id);
+							}}>Delete permanently</button
+						>
+						<button class="button compact" onclick={() => (deleting = null)}>Cancel</button>
+					{:else}
+						<button
+							class="button compact"
+							aria-label={`Delete saved campaign ${item.title}`}
+							disabled={studio.processing ||
+								item.id === studio.campaigns?.campaignIdOf(studio.store.project)}
+							onclick={() => (deleting = item.id)}>Delete</button
+						>
+					{/if}
 				</div>
 			</article>
 		{:else}<div class="no-campaigns">

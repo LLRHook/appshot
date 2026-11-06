@@ -765,6 +765,25 @@ describe('applyProjectedEdit: writing a single-target edit back', () => {
 			expect(stored(next, 'one').variants?.[PHONE]).not.toHaveProperty('check');
 		});
 
+		it.each([false, true])(
+			'keeps the first mark and torn edge on their own target (prior override: %s)',
+			(priorOverride) => {
+				const original = priorOverride
+					? patchSlideVariant(project(), 'one', MEDIUM, { check: { preset: 'detail' } })
+					: project();
+				const next = expectRoundTrip(original, MEDIUM, (view) =>
+					editSlide(view, 'one', { check: { ...check, mark, tear: 'proof-crop' } })
+				);
+				expect(projectForTarget(next, MEDIUM).slides[0].check).toEqual({
+					...check,
+					mark,
+					tear: 'proof-crop'
+				});
+				expect(projectForTarget(next, PHONE).slides[0].check).not.toHaveProperty('mark');
+				expect(projectForTarget(next, PHONE).slides[0].check).not.toHaveProperty('tear');
+			}
+		);
+
 		it('shares a canvas change and keeps a pen mark on the active target', () => {
 			const next = expectRoundTrip(withCheck(), MEDIUM, (view) =>
 				editSlide(view, 'one', { check: { ...check, canvas: 'gold', mark } })

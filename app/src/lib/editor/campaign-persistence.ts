@@ -9,7 +9,11 @@ import {
 } from '$lib/model/capture';
 import type { ProjectAsset, ProjectV2 } from '$lib/model/contracts';
 import { removeAsset, rewriteAssetIds } from '$lib/model/edits';
-import { MAX_CAMPAIGN_IMAGE_BYTES, MAX_PORTABLE_PROJECT_BYTES } from '$lib/model/limits';
+import {
+	MAX_CAMPAIGN_ASSETS,
+	MAX_CAMPAIGN_IMAGE_BYTES,
+	MAX_PORTABLE_PROJECT_BYTES
+} from '$lib/model/limits';
 import {
 	migrateCompositionToV2,
 	parseProjectV2,
@@ -127,6 +131,16 @@ export function writeAllowed(
 }
 
 /* -------------------------------------------------------------------------------------- errors */
+
+/** An edit is malformed, rather than the browser refusing to store it. */
+export class CampaignValidationError extends Error {
+	constructor(cause: unknown) {
+		super(cause instanceof Error ? cause.message : 'This campaign contains an invalid value.', {
+			cause
+		});
+		this.name = 'CampaignValidationError';
+	}
+}
 
 /**
  * Another tab saved this campaign after this tab last read it, so this edit was not written. It is
@@ -314,8 +328,6 @@ export class CampaignPersistence implements ProjectPersistence<ProjectV2> {
 	readonly #journaled = new WeakMap<ProjectV2, number>();
 	/** Slot for a document with no campaign id, such as the example before its first edit. */
 	#implicitSlot: string | undefined;
-	/** Campaigns this page keeps writing elsewhere after a conflict. */
-	readonly #redirects = new Map<string, string>();
 	readonly #origins = new Map<string, CampaignOrigin>();
 	#notes: string[] = [];
 	#tabPointer: string | undefined;
@@ -354,8 +366,7 @@ export class CampaignPersistence implements ProjectPersistence<ProjectV2> {
 	}
 
 	#slotOf(document: ProjectV2): string {
-		const declared = document.campaignId ?? (this.#implicitSlot ??= crypto.randomUUID());
-		return this.#redirects.get(declared) ?? declared;
+		return document.campaignId ?? (this.#implicitSlot ??= crypto.randomUUID());
 	}
 
 	/** The saved campaign a document writes to, to mark it in `listRecoverable` results. */
@@ -366,6 +377,8 @@ export class CampaignPersistence implements ProjectPersistence<ProjectV2> {
 	/* ---------------------------------------------------------------- ProjectPersistence<ProjectV2> */
 
 	rejectReason(document: ProjectV2): string | null {
+		if (Object.keys(document.assets).length > MAX_CAMPAIGN_ASSETS)
+			return `A campaign can hold ${MAX_CAMPAIGN_ASSETS} images. Remove images you no longer need before adding more.`;
 		let total = 0;
 		for (const asset of Object.values(document.assets)) {
 			if (isBundledAsset(asset)) continue;
@@ -418,7 +431,11 @@ export class CampaignPersistence implements ProjectPersistence<ProjectV2> {
 		const slot = this.#slotOf(document);
 		const text = serializeStoredProject(document);
 		// Rejects here, keeping the last good record, rather than storing what could not be reopened.
-		parseStoredProject(text);
+		try {
+			parseStoredProject(text);
+		} catch (error) {
+			throw new CampaignValidationError(error);
+		}
 		const seq = this.#journaled.get(document) ?? this.#seqs.get(slot) ?? 0;
 		const db = await this.#db();
 		const transaction = db.transaction(['campaigns', 'assets', 'meta'], 'readwrite');
@@ -832,17 +849,25 @@ export class CampaignPersistence implements ProjectPersistence<ProjectV2> {
 				throw new Error(
 					`${asset.name ?? 'An image'} is damaged. Add it again to save the project.`
 				);
+			const sha256 = await sha256Hex(bytes);
+			if (asset.sha256 && asset.sha256 !== sha256)
+				throw new Error(
+					`${asset.name ?? 'An image'} does not match its record. Add it again to save the project.`
+				);
 			assets[asset.id] = {
 				...asset,
 				mime: sniffed.mime,
-				sha256: await sha256Hex(bytes),
+				sha256,
 				byteLength: bytes.byteLength,
 				url: dataUrlFromBytes(bytes, sniffed.mime)
 			};
 		}
-		return new Blob(serializePortableProject({ ...document, assets }), {
+		const blob = new Blob(serializePortableProject({ ...document, assets }), {
 			type: 'application/json'
 		});
+		if (blob.size > MAX_PORTABLE_PROJECT_BYTES)
+			throw new Error('The project file would be over 256 MB, so Appshot could not reopen it.');
+		return blob;
 	}
 
 	async #assetBlob(asset: ProjectAsset): Promise<Blob> {
@@ -866,17 +891,20 @@ export class CampaignPersistence implements ProjectPersistence<ProjectV2> {
 
 	/**
 	 * Resolve a conflict by keeping this tab's document as a separate campaign, leaving the other
-	 * tab's work untouched. Follow with `store.saveNow()`. Undo in this tab keeps working in the copy.
+	 * tab's work untouched. After flushing pending writes, give the returned id to the store's
+	 * current document and its matching undo/redo entries, then flush the new document. No redirect
+	 * remains: opening the original later must continue writing to the original.
 	 */
-	keepAsCopy(document: ProjectV2): void {
+	keepAsCopy(document: ProjectV2): ProjectV2 {
 		const copy = crypto.randomUUID();
 		const previous = this.#slotOf(document);
-		const declared = document.campaignId ?? (this.#implicitSlot ??= crypto.randomUUID());
-		this.#redirects.set(declared, copy);
+		const next = { ...document, campaignId: copy };
 		this.#origins.set(copy, { kind: 'conflict-copy', of: previous });
 		// Journal the copy before dropping the old entry, so no moment leaves these edits unprotected.
-		this.journal(document);
+		this.journal(next);
 		storageRemove(local, journalKey(this.#instance, previous));
+		this.#bases.delete(previous);
+		return next;
 	}
 
 	/**

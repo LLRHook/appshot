@@ -3,6 +3,7 @@
 	import SlidePreview from '$lib/components/SlidePreview.svelte';
 	import { getStudio } from '$lib/editor/studio.svelte';
 	import { STYLES } from '$lib/model/studio';
+	import SourceRecord from './SourceRecord.svelte';
 
 	const studio = getStudio();
 </script>
@@ -107,16 +108,24 @@
 				></button
 			>
 			<div class="asset-grid">
-				{#each studio.assets as asset, i (asset.id)}<button
-						class:selected-asset={studio.slide.primaryImage?.id === asset.id}
-						onclick={() => studio.useAsset(asset)}
-						aria-label={`Use screenshot ${i + 1}`}
-						><img src={asset.blobUrl} alt={`Source screenshot ${i + 1}`} /><span
-							>{String(i + 1).padStart(2, '0')}<small
-								>{asset.naturalWidth} × {asset.naturalHeight}</small
-							></span
-						></button
-					>{/each}
+				{#each studio.assets as asset, i (asset.id)}<div class="asset-tile">
+						<button
+							class="asset-choice"
+							class:selected-asset={studio.slide.primaryImage?.id === asset.id}
+							onclick={() => studio.useAsset(asset)}
+							aria-label={`Use screenshot ${i + 1}`}
+							><img src={asset.blobUrl} alt={`Source screenshot ${i + 1}`} /><span
+								>{String(i + 1).padStart(2, '0')}<small
+									>{asset.naturalWidth} × {asset.naturalHeight}</small
+								></span
+							></button
+						><button
+							class="asset-remove"
+							aria-label={`Remove screenshot ${i + 1} from all outputs`}
+							onclick={() => studio.removeAsset(asset.id)}>Remove</button
+						>
+						<SourceRecord asset={studio.store.project.assets[asset.id]} index={i} />
+					</div>{/each}
 			</div>
 			<p class="local-note"><Icon name="check" size={13} />Your images stay on this device.</p>
 		{/if}

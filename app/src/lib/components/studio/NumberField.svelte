@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	let {
 		id,
 		label,
@@ -24,6 +25,11 @@
 		max={bounds[1]}
 		{step}
 		{value}
-		onchange={(event) => apply(Number(event.currentTarget.value))}
+		onchange={async (event) => {
+			const input = event.currentTarget;
+			apply(Number(input.value));
+			await tick();
+			input.value = String(value);
+		}}
 	/></label
 >

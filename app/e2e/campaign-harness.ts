@@ -17,6 +17,7 @@ export { projectForTarget } from '../src/lib/model/targets';
 export { loadProject, parseProject, saveProject } from '../src/lib/model/project';
 export { createDemo, createBlank } from '../src/lib/model/studio';
 export { renderSlide } from '../src/lib/render/canvas';
+export { createPreflight } from '../src/lib/render/preflight';
 export { readCaptures, sourceCompatibility, DEVICES, EditorStore };
 
 /** The real wiring a studio uses: one store, one adapter, real IndexedDB and timers. */

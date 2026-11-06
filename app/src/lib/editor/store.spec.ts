@@ -106,6 +106,28 @@ describe('undo history', () => {
 		store.redo();
 		expect(store.project).toBe(next);
 	});
+
+	it('retags a copied campaign in undo and redo without retagging other campaigns', async () => {
+		const { store } = makeStore({ initial: { ...doc('Other campaign'), note: 'other' } });
+		store.replaceProject({ ...doc('Original start'), note: 'original' });
+		store.apply({ ...store.project, title: 'First edit' });
+		store.apply({ ...store.project, title: 'Future edit' });
+		store.undo();
+		await store.flush();
+		store.remapDocuments((document) =>
+			document.note === 'original' ? { ...document, note: 'copy' } : document
+		);
+		expect(store.project).toMatchObject({ title: 'First edit', note: 'copy' });
+		expect(store.redo()).toBe(true);
+		expect(store.project).toMatchObject({ title: 'Future edit', note: 'copy' });
+		store.undo();
+		store.undo();
+		expect(store.project).toMatchObject({ title: 'Original start', note: 'copy' });
+		store.undo();
+		expect(store.project).toMatchObject({ title: 'Other campaign', note: 'other' });
+		expect(store.canUndo).toBe(false);
+		await store.flush();
+	});
 });
 
 describe('no-op guard', () => {

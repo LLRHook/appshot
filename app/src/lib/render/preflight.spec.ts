@@ -282,6 +282,15 @@ describe('sources (A6, E26)', () => {
 		const [found] = only(await check(bind(campaign(), 'iphone-6.9', 0, sample)), 'sample-source');
 		expect(found).toMatchObject({ severity: 'block', slideIndex: 0 });
 	});
+
+	it('keeps blocking a sample after its URL becomes embedded or session-local', async () => {
+		for (const url of ['data:image/png;base64,AAAA', 'blob:reopened-sample']) {
+			const sample = assetOf('sample', 1320, 2868, { url, provenance: { tool: 'appshot-sample' } });
+			expect(only(await check(bind(campaign(), 'iphone-6.9', 0, sample)), 'sample-source')).toEqual(
+				[expect.objectContaining({ severity: 'block', slideIndex: 0 })]
+			);
+		}
+	});
 });
 
 describe('image layers', () => {
@@ -534,6 +543,21 @@ describe('crops are reported, intent is not assumed (E16)', () => {
 		const placed = (visibleHeight: number) => ({
 			dryRun: async () => {},
 			capturePlacement: async () => ({ width: 1000, height: 2000, visibleHeight, scale: 0.75 })
+		});
+
+		it('reports measured capture enlargement before it becomes a blocking refusal', async () => {
+			const issues = await check(campaign(['iphone-6.9'], 1), {
+				...placed(2000),
+				capturePlacement: async () => ({
+					width: 1500,
+					height: 3000,
+					visibleHeight: 2000,
+					scale: 1.12
+				})
+			});
+			expect(only(issues, 'upscaled')).toEqual([
+				expect.objectContaining({ severity: 'warn', target: 'iphone-6.9', slideIndex: 0 })
+			]);
 		});
 
 		it('reports the share a default placement hides', async () => {

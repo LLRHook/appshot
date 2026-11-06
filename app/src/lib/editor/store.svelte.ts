@@ -139,6 +139,20 @@ export class EditorStore<D extends EditorDocument> {
 		return this.apply(incoming, { select: 0 });
 	}
 
+	/**
+	 * Change save identities without adding an undo step or losing redo. Used when a conflicting
+	 * campaign becomes a copy: its past and future edits must follow that copy, while entries for
+	 * other campaigns keep their own identities. The mapper changes identity metadata only; flush
+	 * earlier writes before calling this so they cannot race the new identity.
+	 */
+	remapDocuments(remap: (document: D) => D): void {
+		this.checkpoint();
+		this.#project = remap(this.#project);
+		this.#past = this.#past.map((entry) => ({ ...entry, project: remap(entry.project) }));
+		this.#future = this.#future.map((entry) => ({ ...entry, project: remap(entry.project) }));
+		this.#scheduleSave();
+	}
+
 	/** Change the edited frame. Selection alone is not an undo step, but it ends the open one. */
 	select(index: number): void {
 		this.checkpoint();

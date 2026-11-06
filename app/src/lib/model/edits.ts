@@ -231,7 +231,7 @@ export function addSlide(project: ProjectV2, slide: StoredSlide, index?: number)
 	return { ...project, slides };
 }
 
-/** Copy a frame right after itself, with every target's source and settings. */
+/** Copy a frame with every target's settings, keeping a connected pair adjacent. */
 export function duplicateSlide(project: ProjectV2, slideId: string, newId: string): ProjectV2 {
 	const index = project.slides.findIndex((slide) => slide.id === slideId);
 	if (index < 0) throw new Error('That frame is no longer in this campaign.');
@@ -239,7 +239,7 @@ export function duplicateSlide(project: ProjectV2, slideId: string, newId: strin
 	return addSlide(
 		project,
 		{ ...source, id: newId, label: `${source.label ?? 'Screenshot'} copy` },
-		index + 1
+		index + (project.continuityMode === 'paired' && project.panorama?.leftId === slideId ? 2 : 1)
 	);
 }
 
@@ -534,12 +534,14 @@ function reconcileCheck(
 	after: Slide
 ): Pick<StoredSlide, 'check'> & { override?: SlideVariant['check'] } {
 	if (!after.check) return {};
-	if (!stored.check && !variant.check) return { check: after.check };
+	const { mark, tear, ...base } = after.check;
 	const patch = { ...variant.check };
-	const shared = stored.check ? { ...stored.check } : undefined;
+	// The first edit may already contain capture-pixel anchors. Only the unanchored settings
+	// become the shared base, including when this target previously had settings of its own.
+	const shared = stored.check ? { ...stored.check } : base;
 	for (const key of ['canvas', 'preset', 'panel', 'wordmark'] as const) {
 		if (before.check?.[key] === after.check[key]) continue;
-		if (shared && !Object.hasOwn(patch, key)) (shared[key] as unknown) = after.check[key];
+		if (!Object.hasOwn(patch, key)) (shared[key] as unknown) = after.check[key];
 		else (patch[key] as unknown) = after.check[key];
 	}
 	if (!documentsEqual(before.check?.mark, after.check.mark)) {
@@ -551,7 +553,11 @@ function reconcileCheck(
 	const resolved = applyCheckPatch(shared, patch);
 	return documentsEqual(resolved, after.check)
 		? { check: shared, override: Object.keys(patch).length ? patch : undefined }
-		: { check: after.check, override: undefined };
+		: {
+				check: base,
+				override:
+					mark || tear ? { ...(mark ? { mark } : {}), ...(tear ? { tear } : {}) } : undefined
+			};
 }
 
 function reconcileSlide(

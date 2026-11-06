@@ -682,8 +682,15 @@ test.describe('two tabs on one campaign', () => {
 		expect(await flush(second)).toBe('failed');
 		const status = await second.evaluate(async () => {
 			const { store, persistence } = window.studio;
-			persistence.keepAsCopy(store.project);
-			await store.saveNow();
+			await store.flush();
+			const previous = persistence.campaignIdOf(store.project);
+			const copy = persistence.keepAsCopy(store.project);
+			store.remapDocuments((document) =>
+				persistence.campaignIdOf(document) === previous
+					? { ...document, campaignId: copy.campaignId }
+					: document
+			);
+			await store.flush();
 			return store.status;
 		});
 		expect(status).toBe('saved');
@@ -956,6 +963,21 @@ test.describe('images', () => {
 });
 
 test.describe('project files', () => {
+	test('Save and Open keep bundled samples blocked from App Store export', async ({ context }) => {
+		const page = await openPage(context);
+		await start(page);
+		const result = await page.evaluate(async () => {
+			const { persistence, store } = window.studio;
+			const T = window.AppshotCampaignTests;
+			const text = await (await persistence.exportPortable(store.project)).text();
+			const reopened = await persistence.importPortable(text);
+			const issues = await T.createPreflight()(reopened, { layout: false });
+			return { issues, urls: Object.values(reopened.assets).map((asset) => asset.url) };
+		});
+		expect(result.urls.every((url) => url.startsWith('blob:'))).toBe(true);
+		expect(result.issues.filter((issue) => issue.code === 'sample-source')).toHaveLength(5);
+	});
+
 	test('carry every field and image byte to a browser that has never seen them', async ({
 		context,
 		browser

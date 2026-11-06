@@ -1,4 +1,4 @@
-import { isBundledAsset, imageRefForAsset } from '../model/assets';
+import { imageRefForAsset } from '../model/assets';
 import { sourceCompatibility } from '../model/capture';
 import {
 	CHECK_PALETTES,
@@ -343,6 +343,22 @@ const COPY_FIELDS = [
 function copyIssues(project: ProjectV2): Issue[] {
 	const placeholder = createSlide(0).typography;
 	const issues: Issue[] = [];
+	if (
+		!project.appName?.trim() &&
+		(project.style !== CHECK_STYLE_ID ||
+			project.targets.some((target) => {
+				const composition = projectForTarget(project, target);
+				return composition.slides.some(
+					(_, index) => resolveCheckSettings(composition, index).wordmark
+				);
+			}))
+	)
+		issues.push({
+			severity: 'warn',
+			code: 'working-title-wordmark',
+			control: 'app-name',
+			message: `The screenshots print the campaign working title ("${project.name}"). Set the app name before exporting.`
+		});
 	project.slides.forEach((slide, slideIndex) => {
 		for (const field of COPY_FIELDS) {
 			const text = linenPlainText(field.read(slide) ?? '');
@@ -375,7 +391,11 @@ function copyIssues(project: ProjectV2): Issue[] {
 function inPair(composition: Composition, slideIndex: number): boolean {
 	const { panorama, slides } = composition;
 	const id = slides[slideIndex].id;
-	return !!panorama && (panorama.leftId === id || panorama.rightId === id);
+	return (
+		composition.continuityMode === 'paired' &&
+		!!panorama &&
+		(panorama.leftId === id || panorama.rightId === id)
+	);
 }
 
 /** A frame that deliberately draws no capture as its main panel. */
@@ -553,7 +573,7 @@ function provenanceIssues(
 	for (const { slideIndex, asset } of frameAssets(project, composition)) {
 		const where = { target: target.id, slideIndex, control: CONTROL_SOURCE };
 		const frame = `Frame ${slideIndex + 1}`;
-		if (isBundledAsset(asset) && asset.url.startsWith('/demo/'))
+		if (asset.provenance?.tool === 'appshot-sample' || asset.url.startsWith('/demo/'))
 			issues.push({
 				...where,
 				severity: 'block',
@@ -975,6 +995,21 @@ export function createPreflight(runtime: PreflightRuntime = {}) {
 										? null
 										: await runtime.capturePlacement?.(composition, slideIndex);
 								if (placement) {
+									const source = inPair(composition, slideIndex)
+										? composition.panorama?.image
+										: composition.slides[slideIndex].primaryImage;
+									const compatibility =
+										source &&
+										sourceCompatibility(source, target, source.naturalWidth * placement.scale);
+									if (compatibility?.level === 'upscaled')
+										issues.push({
+											severity: compatibility.severity === 'block' ? 'block' : 'warn',
+											code: 'upscaled',
+											target: target.id,
+											slideIndex,
+											control: placementControl(composition),
+											message: `Frame ${slideIndex + 1} on ${target.label}: ${compatibility.message}`
+										});
 									const issue = cropIssue(
 										{
 											hidden: 1 - placement.visibleHeight / placement.height,
