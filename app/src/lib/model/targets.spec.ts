@@ -159,7 +159,8 @@ describe('projectForTarget', () => {
 			id: 'large',
 			blobUrl: '/sample/today.png',
 			naturalWidth: 1320,
-			naturalHeight: 2868
+			naturalHeight: 2868,
+			sample: true
 		});
 		expect(layer).toMatchObject({ radius: 24, rotation: 3, shadow: 'soft', sampling: 'pixelated' });
 		expect(projectForTarget(project, 'ipad-13').slides[0].layers).toBeUndefined();

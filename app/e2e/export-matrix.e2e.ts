@@ -286,8 +286,9 @@ test('a v1 project keeps its layers and sample art through save and reopen', asy
 	expect(result.reopenedDifference.maxDelta).toBeLessThanOrEqual(3);
 	expect(result.reopenedDifference.differing).toBeLessThanOrEqual(2000);
 	expect(result.entries).toEqual([
-		'01-frame-1-1320x2868.png',
-		'02-frame-2-1320x2868.png',
-		'project.json'
+		'DRAFT-01-frame-1-1320x2868.png',
+		'DRAFT-02-frame-2-1320x2868.png',
+		'project.json',
+		'README.txt'
 	]);
 });

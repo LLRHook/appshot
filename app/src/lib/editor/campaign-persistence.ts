@@ -1,4 +1,10 @@
-import { bytesFromDataUrl, dataUrlFromBytes, isBundledAsset, sha256Hex } from '$lib/model/assets';
+import {
+	bytesFromDataUrl,
+	dataUrlFromBytes,
+	isBundledAsset,
+	markSampleOrigin,
+	sha256Hex
+} from '$lib/model/assets';
 import {
 	assetFromCapture,
 	readCaptures,
@@ -873,7 +879,7 @@ export class CampaignPersistence implements ProjectPersistence<ProjectV2> {
 			}
 			hashes.set(sha256, asset.id);
 			const url = await this.#storeBytes(sha256, new Blob([bytes], { type: mime }), mime);
-			assets[asset.id] = { ...asset, sha256, byteLength: bytes.byteLength, url };
+			assets[asset.id] = markSampleOrigin({ ...asset, sha256, byteLength: bytes.byteLength, url });
 		}
 		return rewriteAssetIds({ ...project, assets }, renames);
 	}

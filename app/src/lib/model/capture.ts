@@ -1,4 +1,4 @@
-import { assetIdForHash, sha256Hex, type AssetMime } from './assets';
+import { assetIdForHash, markSampleOrigin, sha256Hex, type AssetMime } from './assets';
 import type {
 	AspectFamily,
 	CaptureClassification,
@@ -471,7 +471,7 @@ export async function readCaptures(
 
 /** The project record for a capture whose bytes now live at `url`. */
 export function assetFromCapture(capture: CaptureFile, url: string): ProjectAsset {
-	return {
+	return markSampleOrigin({
 		id: assetIdForHash(capture.sha256),
 		sha256: capture.sha256,
 		mime: capture.mime,
@@ -480,5 +480,5 @@ export function assetFromCapture(capture: CaptureFile, url: string): ProjectAsse
 		naturalWidth: capture.naturalWidth,
 		naturalHeight: capture.naturalHeight,
 		name: capture.name
-	};
+	});
 }

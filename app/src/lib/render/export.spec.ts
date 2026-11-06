@@ -2,11 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { assetOf, campaign, patternPixels, pngFile } from './__fixtures__/export';
 import type { Composition, ImageRef } from '../model/types';
 import { parseProject } from '../model/project';
-import { parseProjectV2 } from '../model/migrate';
+import { migrateCompositionToV2, parseProjectV2 } from '../model/migrate';
 import { DEVICES } from '../model/devices';
 import { createSlide } from '../model/studio';
 import { portableComposition, projectTextFromFile } from './export';
 import { createZip } from './zip';
+import { dataUrlFromBytes } from '../model/assets';
 
 const PNG = pngFile(2, 2, patternPixels(2, 2));
 
@@ -90,6 +91,35 @@ describe('portableComposition keeps everything a v1 project can hold', () => {
 		const before = structuredClone(original);
 		await portableComposition(original);
 		expect(original).toEqual(before);
+	});
+
+	it('keeps sample origin when embedded legacy images are reopened as a campaign', async () => {
+		stubFetch();
+		const original = composition();
+		original.slides[0].primaryImage = ref('sample-screen', '/sample/today.png');
+		const portable = await portableComposition(original);
+		const reopened = migrateCompositionToV2(parseProject(JSON.stringify(portable)));
+		expect(portable.slides[0].primaryImage).toMatchObject({ sample: true });
+		expect(portable.slides[0].layers?.[1].image).toMatchObject({ sample: true });
+		// The mock returns identical bytes for each fetch; migration correctly deduplicates them.
+		const assets = Object.values(reopened.assets);
+		expect(assets).toHaveLength(1);
+		expect(assets[0].provenance?.tool).toBe('appshot-sample');
+	});
+
+	it('retains sample origin when a later legacy reference shares an earlier image’s bytes', () => {
+		const url = dataUrlFromBytes(PNG, 'image/png');
+		const original = {
+			...composition(),
+			slides: [
+				createSlide(0, ref('plain', url, 2, 2)),
+				createSlide(1, { ...ref('later-sample', url, 2, 2), sample: true as const })
+			]
+		};
+		const migrated = migrateCompositionToV2(original);
+		const assets = Object.values(migrated.assets);
+		expect(assets).toHaveLength(1);
+		expect(assets[0].provenance?.tool).toBe('appshot-sample');
 	});
 
 	it('says which image is missing rather than saving a broken project', async () => {

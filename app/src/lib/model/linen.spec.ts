@@ -236,8 +236,8 @@ describe('Table Linen manifest conversion', () => {
 			}
 		});
 		expect(project.continuityMode).toBe('paired');
-		expect(project.slides[0].primaryImage).toEqual(capture);
-		expect(project.slides[1].primaryImage).toEqual(capture);
+		expect(project.slides[0].primaryImage).toEqual({ ...capture, sample: true });
+		expect(project.slides[1].primaryImage).toEqual({ ...capture, sample: true });
 	});
 
 	it('survives the project boundary unchanged and drives canonical pair geometry', () => {

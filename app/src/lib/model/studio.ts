@@ -1,4 +1,5 @@
 import type { Composition, ImageRef, Slide } from './types';
+import { isBundledSampleUrl } from './image';
 
 export type StyleId =
 	| 'cobalt'
@@ -86,7 +87,13 @@ export function getStyle(id: StyleId): StyleDirection {
 	return STYLES.find((s) => s.id === id) ?? STYLES[0];
 }
 export function imageRef(id: string, url: string, width = 1320, height = 2868): ImageRef {
-	return { id, blobUrl: url, naturalWidth: width, naturalHeight: height };
+	return {
+		id,
+		blobUrl: url,
+		naturalWidth: width,
+		naturalHeight: height,
+		...(isBundledSampleUrl(url) ? { sample: true } : {})
+	};
 }
 export function createSlide(index: number, image?: ImageRef): Slide {
 	return {

@@ -1,4 +1,10 @@
-import { dataUrlByteLength, dataUrlMime, isBundledAsset, type AssetMime } from './assets';
+import {
+	dataUrlByteLength,
+	dataUrlMime,
+	isBundledAsset,
+	markSampleOrigin,
+	type AssetMime
+} from './assets';
 import { parseCheckSettingsPatch } from './check';
 import type {
 	AssetId,
@@ -86,7 +92,16 @@ export function migrateCompositionToV2(composition: Composition): ProjectV2 {
 	const idsByUrl = new Map<string, AssetId>();
 	function assetId(ref: ImageRef): AssetId {
 		const known = idsByUrl.get(ref.blobUrl);
-		if (known !== undefined) return known;
+		if (known !== undefined) {
+			if (ref.sample) {
+				const asset = assets.get(known)!;
+				assets.set(known, {
+					...asset,
+					provenance: { ...asset.provenance, tool: 'appshot-sample' }
+				});
+			}
+			return known;
+		}
 		let unique = ref.id;
 		for (let suffix = 2; assets.has(unique); suffix++) {
 			unique = `${ref.id.slice(0, MAX_IMAGE_ID_LENGTH - 8)}~${suffix}`;
@@ -99,7 +114,9 @@ export function migrateCompositionToV2(composition: Composition): ProjectV2 {
 			url: ref.blobUrl,
 			naturalWidth: ref.naturalWidth,
 			naturalHeight: ref.naturalHeight,
-			...(isBundledSampleUrl(ref.blobUrl) ? { provenance: { tool: 'appshot-sample' } } : {})
+			...(isBundledSampleUrl(ref.blobUrl) || ref.sample
+				? { provenance: { tool: 'appshot-sample' } }
+				: {})
 		});
 		return unique;
 	}
@@ -218,7 +235,7 @@ function parseAsset(value: unknown, key: string, form: AssetForm): ProjectAsset 
 		}
 	}
 	const name = optionalText(asset.name, 255);
-	return {
+	return markSampleOrigin({
 		id: assetId,
 		...(sha256 !== undefined ? { sha256 } : {}),
 		mime,
@@ -235,7 +252,7 @@ function parseAsset(value: unknown, key: string, form: AssetForm): ProjectAsset 
 					}
 				}
 			: {})
-	};
+	});
 }
 
 function parseAssets(value: unknown, form: AssetForm): Record<AssetId, ProjectAsset> {

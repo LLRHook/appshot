@@ -38,6 +38,8 @@ export interface ImageRef {
 	blobUrl: string;
 	naturalWidth: number;
 	naturalHeight: number;
+	/** Sample origin survives embedding and legacy project round trips. */
+	sample?: true;
 }
 
 export interface SlideContinuity {

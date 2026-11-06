@@ -1,9 +1,14 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { decodePng, readPngStructure } from '../render/png';
+import { assetFromCapture, readCapture } from './capture';
 import { isBundledSampleUrl, SAMPLE_MARK_URL } from './image';
 import { createDemo } from './studio';
+import { SAMPLE_FINGERPRINTS } from './sample-fingerprints.generated';
+import { createPreflight } from '../render/preflight';
+import { campaign } from '../render/__fixtures__/export';
 
 /** The committed sample files, read as a browser would be given them. */
 const FOLDER = path.resolve('static/sample');
@@ -81,5 +86,41 @@ describe('the bundled sample files', () => {
 			slide.badge ?? ''
 		]);
 		expect(copy.join(' ')).toMatch(/made-up/);
+	});
+
+	it.each(['today', 'mark'])(
+		'recognizes %s bytes uploaded under a different name',
+		async (name) => {
+			const bytes = file(`${name}.png`);
+			const structure = readPngStructure(bytes);
+			const capture = await readCapture(new File([bytes], 'my-image.png', { type: 'image/png' }), {
+				decode: async () => ({ width: structure.width, height: structure.height })
+			});
+			const asset = assetFromCapture(capture, 'blob:uploaded-image');
+			expect(asset.provenance?.tool).toBe('appshot-sample');
+		}
+	);
+
+	it('tracks every bundled image by its actual bytes', () => {
+		const expected = Object.fromEntries(
+			[...SCREENS, 'mark'].map((name) => [
+				`/sample/${name}.png`,
+				createHash('sha256')
+					.update(file(`${name}.png`))
+					.digest('hex')
+			])
+		);
+		expect(SAMPLE_FINGERPRINTS).toEqual(expected);
+	});
+
+	it('blocks an unchanged sample even if its capture record is relabelled', async () => {
+		const project = campaign(['iphone-6.9'], 1);
+		const asset = Object.values(project.assets)[0];
+		asset.sha256 = createHash('sha256').update(file('today.png')).digest('hex');
+		asset.provenance = { ...asset.provenance, tool: 'My capture tool' };
+		const issues = await createPreflight()(project, { layout: false });
+		expect(issues).toContainEqual(
+			expect.objectContaining({ code: 'sample-source', severity: 'block', slideIndex: 0 })
+		);
 	});
 });

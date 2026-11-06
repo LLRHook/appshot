@@ -1,5 +1,5 @@
 import type { AssetId, ProjectAsset } from './contracts';
-import { isBundledSampleUrl } from './image';
+import { isBundledSampleUrl, isKnownSampleHash } from './image';
 import type { ImageRef } from './types';
 
 /**
@@ -59,8 +59,24 @@ export function imageRefForAsset(asset: ProjectAsset): ImageRef {
 		id: asset.id,
 		blobUrl: asset.url,
 		naturalWidth: asset.naturalWidth,
-		naturalHeight: asset.naturalHeight
+		naturalHeight: asset.naturalHeight,
+		...(isSampleAsset(asset) ? { sample: true } : {})
 	};
+}
+
+/** Origin is retained even if a bundled image is embedded, renamed or re-uploaded unchanged. */
+export function isSampleAsset(asset: Pick<ProjectAsset, 'url' | 'sha256' | 'provenance'>): boolean {
+	return (
+		isBundledSampleUrl(asset.url) ||
+		isKnownSampleHash(asset.sha256) ||
+		asset.provenance?.tool === 'appshot-sample'
+	);
+}
+
+export function markSampleOrigin(asset: ProjectAsset): ProjectAsset {
+	return isSampleAsset(asset) && asset.provenance?.tool !== 'appshot-sample'
+		? { ...asset, provenance: { ...asset.provenance, tool: 'appshot-sample' } }
+		: asset;
 }
 
 /** Bundled samples ship with the app, so their bytes are neither stored nor counted. */

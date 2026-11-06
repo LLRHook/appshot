@@ -1,6 +1,7 @@
-import { dataUrlFromBytes } from '../model/assets';
+import { bytesFromDataUrl, dataUrlFromBytes, sha256Hex } from '../model/assets';
 import { sniffImage } from '../model/capture';
 import { DEVICES } from '../model/devices';
+import { isBundledSampleUrl, isKnownSampleHash } from '../model/image';
 import { parseProject } from '../model/project';
 import type { Composition, ImageRef } from '../model/types';
 import { renderSlide } from './canvas';
@@ -73,39 +74,51 @@ export async function exportSlide(composition: Composition, index: number): Prom
 const MISSING_ORIGINAL =
 	'An original screenshot is missing. Add it again to save the complete project.';
 
-/** Fetch an image once, however many frames and layers use it, as a data URL of its real format. */
-async function embeddedImage(url: string): Promise<string> {
-	const response = await fetch(url).catch(() => null);
-	if (!response?.ok) throw new Error(MISSING_ORIGINAL);
-	const bytes = new Uint8Array(await response.arrayBuffer());
+/** Embed original bytes and recognize sample origin independently of their current URL. */
+async function embeddedImage(url: string): Promise<{ url: string; sample: boolean }> {
+	let bytes: Uint8Array<ArrayBuffer>;
+	if (url.startsWith('data:')) bytes = bytesFromDataUrl(url).bytes;
+	else {
+		const response = await fetch(url).catch(() => null);
+		if (!response?.ok) throw new Error(MISSING_ORIGINAL);
+		bytes = new Uint8Array(await response.arrayBuffer());
+	}
 	const sniffed = sniffImage(bytes);
 	if (!sniffed) throw new Error('A screenshot could not be saved into the project.');
-	return dataUrlFromBytes(bytes, sniffed.mime);
+	return {
+		url: url.startsWith('data:') ? url : dataUrlFromBytes(bytes, sniffed.mime),
+		sample: isKnownSampleHash(await sha256Hex(bytes))
+	};
+}
+
+function imagesOf(composition: Composition): ImageRef[] {
+	return composition.slides
+		.flatMap((slide) => [
+			slide.primaryImage,
+			slide.continuity.incoming,
+			slide.continuity.outgoing,
+			...(slide.layers ?? []).map((layer) => layer.image)
+		])
+		.concat(composition.panorama?.image)
+		.filter((image): image is ImageRef => image !== undefined);
 }
 
 /** Resolve local blob/static URLs so the project can reopen on another computer. */
 export async function portableComposition(composition: Composition): Promise<Composition> {
 	const copy = structuredClone(composition);
-	const converted = new Map<string, Promise<string>>();
-	async function embed(image?: ImageRef) {
-		if (!image || image.blobUrl.startsWith('data:')) return;
+	const converted = new Map<string, ReturnType<typeof embeddedImage>>();
+	async function embed(image: ImageRef) {
+		if (isBundledSampleUrl(image.blobUrl)) image.sample = true;
 		let pending = converted.get(image.blobUrl);
 		if (!pending) {
 			pending = embeddedImage(image.blobUrl);
 			converted.set(image.blobUrl, pending);
 		}
-		image.blobUrl = await pending;
+		const embedded = await pending;
+		image.blobUrl = embedded.url;
+		if (embedded.sample) image.sample = true;
 	}
-	await Promise.all(
-		copy.slides
-			.flatMap((slide) => [
-				embed(slide.primaryImage),
-				embed(slide.continuity.incoming),
-				embed(slide.continuity.outgoing),
-				...(slide.layers ?? []).map((layer) => embed(layer.image))
-			])
-			.concat(embed(copy.panorama?.image))
-	);
+	await Promise.all(imagesOf(copy).map(embed));
 	return parseProject(JSON.stringify(copy));
 }
 
@@ -115,21 +128,27 @@ export async function exportCampaign(
 	onProgress?: (done: number, total: number) => void
 ): Promise<Blob> {
 	if (!composition.slides.length) throw new Error('Add a screenshot before exporting.');
+	const portable = await portableComposition(composition);
+	const sample = imagesOf(portable).some((image) => image.sample);
 	const zip = new ZipWriter();
 	const { width, height } = DEVICES[composition.device];
 	onProgress?.(0, composition.slides.length);
 	for (let index = 0; index < composition.slides.length; index++) {
 		const { bytes } = await verifiedFrame(composition, index);
 		zip.add(
-			`${String(index + 1).padStart(2, '0')}-${safeFilename(composition.slides[index].label || composition.name)}-${width}x${height}.png`,
+			`${sample ? 'DRAFT-' : ''}${String(index + 1).padStart(2, '0')}-${safeFilename(composition.slides[index].label || composition.name)}-${width}x${height}.png`,
 			bytes
 		);
 		onProgress?.(index + 1, composition.slides.length);
 	}
-	zip.add(
-		PROJECT_FILE,
-		new TextEncoder().encode(JSON.stringify(await portableComposition(composition)))
-	);
+	zip.add(PROJECT_FILE, new TextEncoder().encode(JSON.stringify(portable)));
+	if (sample)
+		zip.add(
+			'README.txt',
+			new TextEncoder().encode(
+				'DRAFT — contains Appshot sample images. Replace them with your own captures before App Store submission.\n'
+			)
+		);
 	return zip.finish();
 }
 

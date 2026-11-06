@@ -107,7 +107,7 @@ test('native Linen import edits colors and shared geometry, then survives undo, 
 	expect(saved.panorama?.linenPhone).toMatchObject({ centerX: 1160, top: 700, rotation: -3.5 });
 	expect(saved.slides[0].linen?.colors.canvas).toBe('#256B70');
 	expect(saved.slides[1].linen?.colors.canvas).toBe('#FBF6EF');
-	expect(saved.panorama?.image).toEqual(image);
+	expect(saved.panorama?.image).toEqual({ ...image, sample: true });
 	expect(saved.slides.every((slide) => slide.primaryImage?.blobUrl === image.blobUrl)).toBe(true);
 	const clean = await browser.newContext();
 	try {

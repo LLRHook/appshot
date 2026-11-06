@@ -1,4 +1,4 @@
-import { imageRefForAsset } from '../model/assets';
+import { imageRefForAsset, isSampleAsset } from '../model/assets';
 import { sourceCompatibility } from '../model/capture';
 import {
 	CHECK_PALETTES,
@@ -26,7 +26,6 @@ import {
 	TARGET_CLASSES,
 	type DeviceId
 } from '../model/devices';
-import { isBundledSampleUrl } from '../model/image';
 import { MAX_FRAMES } from '../model/limits';
 import {
 	LINEN_STYLE_ID,
@@ -562,9 +561,6 @@ function wrongDeviceFamily(device: string, target: OutputTarget): boolean {
 	if (target.classId === 'iphone-duo') return !isDuo && (isPad || isPhone);
 	return target.platform === 'ipad' ? !isPad && (isPhone || isDuo) : !isPhone && (isPad || isDuo);
 }
-
-const isSampleAsset = (asset: ProjectAsset) =>
-	asset.provenance?.tool === 'appshot-sample' || isBundledSampleUrl(asset.url);
 
 /**
  * Sample art on a frame. Art otherwise skips the capture checks, because it never claims to show

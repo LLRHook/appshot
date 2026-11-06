@@ -1,4 +1,5 @@
 import type { ImageRef } from './types';
+import { SAMPLE_FINGERPRINTS } from './sample-fingerprints.generated';
 
 /**
  * The one source of truth for what an ImageRef may contain. `project.ts` (import,
@@ -21,6 +22,12 @@ const INVALID_IMAGE_SIZE =
 export const SAMPLE_MARK_URL = '/sample/mark.png';
 
 const BUNDLED_SAMPLE = /^\/sample\/(?:today|plant|schedule|journal|insights|mark)\.png$/;
+const SAMPLE_HASHES = new Set<string>(Object.values(SAMPLE_FINGERPRINTS));
+
+/** Exact bundled bytes remain a sample when their file name or URL changes. */
+export function isKnownSampleHash(sha256: string | undefined): boolean {
+	return sha256 !== undefined && SAMPLE_HASHES.has(sha256);
+}
 
 /**
  * Files of the fictional sample campaign, shipped with the app so a project can name them instead
@@ -96,11 +103,15 @@ export function parseImageRef(value: unknown): ImageRef {
 		naturalWidth * naturalHeight > MAX_IMAGE_PIXELS
 	)
 		throw new Error(INVALID_IMAGE_SIZE);
+	if (image.sample !== undefined && typeof image.sample !== 'boolean')
+		throw new Error(INVALID_IMAGE);
+	const blobUrl = imageUrl(image.blobUrl);
 	return {
 		id: imageId(image.id),
-		blobUrl: imageUrl(image.blobUrl),
+		blobUrl,
 		naturalWidth,
-		naturalHeight
+		naturalHeight,
+		...(image.sample === true || isBundledSampleUrl(blobUrl) ? { sample: true } : {})
 	};
 }
 

@@ -600,6 +600,27 @@ test('keeps editing and export controls usable at a 390px viewport', async ({ pa
 	);
 });
 
+test('uploading unchanged sample bytes keeps the sample warning after reload', async ({
+	page
+}, testInfo) => {
+	await openStudio(page);
+	await page.getByRole('button', { name: 'New campaign', exact: true }).click();
+	await page.getByLabel('Upload screenshots', { exact: true }).setInputFiles({
+		name: 'my-image.png',
+		mimeType: 'image/png',
+		buffer: await readFile(fixture('today'))
+	});
+	await expect(page.locator('.source-findings')).toContainText("Appshot's bundled samples");
+	const saved = await saveProjectFile(page, testInfo);
+	expect(Object.values(saved.project.assets)[0].provenance?.tool).toBe('appshot-sample');
+	await page.reload();
+	await expect(page.locator('.studio')).not.toHaveClass(/loading/);
+	await expect(page.locator('.source-findings')).toContainText("Appshot's bundled samples");
+	await page.getByRole('button', { name: 'Export set', exact: true }).click();
+	await expect(page.locator('.export-findings')).toContainText("Appshot's bundled samples");
+	await expect(page.getByRole('button', { name: 'Download screenshot set' })).toBeDisabled();
+});
+
 test.describe('sample images from older builds', () => {
 	const RETIRED = /older Appshot sample images.*no longer bundled.*embedded images/;
 
