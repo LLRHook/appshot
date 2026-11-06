@@ -376,11 +376,6 @@ p {
 	letter-spacing: -0.3px;
 	line-height: 0.92;
 }
-.style-type.mono {
-	font-family: monospace;
-	font-size: 14px;
-	letter-spacing: -0.7px;
-}
 .style-orbit {
 	border: 16px solid;
 	opacity: 0.38;

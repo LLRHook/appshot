@@ -477,6 +477,90 @@ describe('the library', () => {
 		expect(projectForTarget(next, PHONE).panorama).toBeUndefined();
 	});
 
+	it.each(['variant', 'shared'] as const)(
+		'clears removed crop annotations from %s settings without changing other outputs',
+		(where) => {
+			const mark: CheckMark = {
+				kind: 'ring',
+				anchor: 'crop',
+				rect: { x: 0, y: 0, width: 1, height: 1 },
+				seed: 3
+			};
+			let original = setSlideLayers(project(), 'one', PHONE, [
+				{
+					id: 'crop',
+					kind: 'source-crop',
+					image: 'large',
+					crop: { x: 0, y: 0, width: 10, height: 10 },
+					x: 0,
+					y: 0,
+					scale: 1
+				}
+			]);
+			original = setSlideLayers(original, 'one', MEDIUM, [
+				{
+					id: 'crop',
+					kind: 'source-crop',
+					image: 'medium',
+					crop: { x: 0, y: 0, width: 10, height: 10 },
+					x: 0,
+					y: 0,
+					scale: 1
+				}
+			]);
+			original =
+				where === 'shared'
+					? patchSlide(original, 'one', {
+							check: {
+								canvas: 'teal',
+								preset: 'hero',
+								panel: true,
+								wordmark: true,
+								mark,
+								tear: 'crop'
+							}
+						})
+					: patchSlideVariant(original, 'one', PHONE, { check: { mark, tear: 'crop' } });
+			const next = removeAsset(original, 'large');
+			expect(projectForTarget(next, PHONE).slides[0].check?.mark).toBeUndefined();
+			expect(projectForTarget(next, PHONE).slides[0].check?.tear).toBeUndefined();
+			expect(projectForTarget(next, MEDIUM).slides[0]).toEqual(
+				projectForTarget(original, MEDIUM).slides[0]
+			);
+			expect(projectForTarget(original, PHONE).slides[0].check?.mark).toEqual(mark);
+		}
+	);
+
+	it('clears a shared panel mark on both pair frames when only the pair owns the source', () => {
+		let original = bindPanoramaSource(
+			connectPair(project(), 'one', { offset: 0, scale: 1, tilt: 0 }),
+			PHONE,
+			'large'
+		);
+		const check: CheckSettings = {
+			canvas: 'teal',
+			preset: 'hero',
+			panel: true,
+			wordmark: true,
+			mark: { kind: 'ring', anchor: 'panel', rect: { x: 0, y: 0, width: 1, height: 1 }, seed: 1 }
+		};
+		original = {
+			...original,
+			slides: original.slides.map((slide, index) =>
+				index > 1
+					? slide
+					: {
+							...slide,
+							check,
+							variants: undefined
+						}
+			)
+		};
+		const next = removeAsset(original, 'large');
+		for (const slide of projectForTarget(next, PHONE).slides.slice(0, 2))
+			expect(slide.check?.mark).toBeUndefined();
+	});
+
 	it('replaces a capture everywhere, trimming crops to the new image and clearing overrides', () => {
 		const set = setSlideLayers(project(), 'one', MEDIUM, [
 			{

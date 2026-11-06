@@ -5,6 +5,16 @@ async function ready(page: Page) {
 	await expect(page.locator('.studio')).not.toHaveClass(/loading/);
 }
 
+async function openSavedCampaign(page: Page, title: string) {
+	await page.getByRole('button', { name: /^Recent campaigns/ }).click();
+	await page
+		.locator('.saved-list article')
+		.filter({ hasText: title })
+		.getByRole('button', { name: 'Open', exact: true })
+		.click();
+	await expect(page.locator('.save-status')).toHaveText('All changes saved');
+}
+
 async function syntheticCapture(page: Page, width: number, height: number) {
 	const base64 = await page.evaluate(
 		({ width, height }) => {
@@ -79,6 +89,10 @@ test('the store preview and complete export checklist fit a 390px viewport', asy
 	await expect(dialog.locator('.export-findings')).not.toContainText('has not measured');
 	await expect(dialog.getByRole('button', { name: 'Download screenshot set' })).toBeDisabled();
 	await expect(dialog.getByRole('button', { name: 'Draft PNG', exact: true })).toBeEnabled();
+	await expect(dialog.getByRole('link', { name: '2026-11-05', exact: true })).toHaveAttribute(
+		'href',
+		/developer\.apple\.com/
+	);
 	const box = await dialog.boundingBox();
 	expect(box!.x).toBeGreaterThanOrEqual(0);
 	expect(box!.x + box!.width).toBeLessThanOrEqual(390);
@@ -114,6 +128,174 @@ test('library removal unbinds a screenshot and undo restores it', async ({ page 
 	await expect(page.locator('.current-asset img')).toHaveAttribute('src', original!);
 });
 
+test('removing an image clears its anchored pen mark and undo restores a paintable frame', async ({
+	page
+}) => {
+	await ready(page);
+	await page.getByRole('switch', { name: 'Connect adjacent screenshots' }).click();
+	await page.getByRole('button', { name: 'Apply The Check style' }).click();
+	await page.getByRole('button', { name: 'Composition', exact: true }).click();
+	await page.locator('.layer-controls summary').click();
+	await page.getByRole('button', { name: 'Lift a detail', exact: true }).click();
+	const layer = await page.getByLabel('Selected layer', { exact: true }).inputValue();
+	const mark = page.getByRole('switch', { name: 'Pen mark', exact: true });
+	await mark.click();
+	await page.getByLabel('Marks', { exact: true }).selectOption(layer);
+	await expect(page.locator('.render-error')).toHaveCount(0);
+	await page.getByRole('button', { name: 'Screenshots', exact: true }).click();
+	await page
+		.getByRole('button', { name: 'Remove screenshot 1 from all outputs', exact: true })
+		.click();
+	await expect(mark).not.toBeChecked();
+	await expect(page.getByLabel('Selected layer', { exact: true })).toHaveCount(0);
+	await expect(page.locator('.render-error')).toHaveCount(0);
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(mark).toBeChecked();
+	await expect(page.getByLabel('Marks', { exact: true })).toHaveValue(layer);
+	await expect(page.locator('.render-error')).toHaveCount(0);
+});
+
+test('reopening another tab’s newer campaign preserves stale undo entries as a separate copy', async ({
+	page,
+	context
+}) => {
+	await ready(page);
+	await page.getByLabel('Campaign name').fill('Reopened campaign');
+	await page.getByLabel('Headline', { exact: false }).fill('Shared version');
+	await expect(page.locator('.save-status')).toHaveText('All changes saved');
+	const other = await context.newPage();
+	try {
+		await ready(other);
+		await page.getByLabel('Headline', { exact: false }).fill('Other tab’s saved version');
+		await expect(page.locator('.save-status')).toHaveText('All changes saved');
+		await expect(other.locator('.conflict-notice')).toBeVisible();
+		await other.getByLabel('Headline', { exact: false }).fill('My stale edit');
+		await expect(other.locator('.save-status')).toHaveText('Save a project backup');
+		await openSavedCampaign(other, 'Reopened campaign');
+		await expect(other.getByLabel('Headline', { exact: false })).toHaveValue(
+			'Other tab’s saved version'
+		);
+		await other.getByRole('button', { name: 'Undo', exact: true }).click();
+		await expect(other.getByLabel('Headline', { exact: false })).toHaveValue('My stale edit');
+		await expect(other.locator('.save-status')).toHaveText('All changes saved');
+		await page.reload();
+		await expect(page.locator('.studio')).not.toHaveClass(/loading/);
+		await expect(page.getByLabel('Headline', { exact: false })).toHaveValue(
+			'Other tab’s saved version'
+		);
+		await other.reload();
+		await expect(other.locator('.studio')).not.toHaveClass(/loading/);
+		await expect(other.getByLabel('Headline', { exact: false })).toHaveValue('My stale edit');
+	} finally {
+		await other.close();
+	}
+});
+
+test('reopening an advanced campaign preserves undo entries even while another campaign is active', async ({
+	page,
+	context
+}) => {
+	await ready(page);
+	await page.getByLabel('Campaign name').fill('Advanced saved campaign');
+	await page.getByLabel('Campaign name').press('Tab');
+	await expect(page.locator('.save-status')).toHaveText('All changes saved');
+	const other = await context.newPage();
+	try {
+		await ready(other);
+		await other.getByLabel('Headline', { exact: false }).fill('My earlier saved version');
+		await expect(other.locator('.save-status')).toHaveText('All changes saved');
+		await other.getByRole('button', { name: 'New campaign', exact: true }).click();
+		await expect(other.locator('.save-status')).toHaveText('All changes saved');
+		await page.reload();
+		await expect(page.locator('.studio')).not.toHaveClass(/loading/);
+		await page.getByLabel('Headline', { exact: false }).fill('The latest saved original');
+		await expect(page.locator('.save-status')).toHaveText('All changes saved');
+		await openSavedCampaign(other, 'Advanced saved campaign');
+		await other.getByRole('button', { name: 'Undo', exact: true }).click();
+		await other.getByRole('button', { name: 'Undo', exact: true }).click();
+		await expect(other.getByLabel('Headline', { exact: false })).toHaveValue(
+			'My earlier saved version'
+		);
+		await expect(other.locator('.save-status')).toHaveText('All changes saved');
+		await page.reload();
+		await expect(page.locator('.studio')).not.toHaveClass(/loading/);
+		await expect(page.getByLabel('Headline', { exact: false })).toHaveValue(
+			'The latest saved original'
+		);
+		await other.reload();
+		await expect(other.locator('.studio')).not.toHaveClass(/loading/);
+		await expect(other.getByLabel('Headline', { exact: false })).toHaveValue(
+			'My earlier saved version'
+		);
+	} finally {
+		await other.close();
+	}
+});
+
+test('opening a saved campaign without edits does not conflict with its editing tab', async ({
+	page,
+	context
+}) => {
+	await ready(page);
+	await page.getByLabel('Campaign name').fill('Read-only reopen');
+	await page.getByLabel('Campaign name').press('Tab');
+	await expect(page.locator('.save-status')).toHaveText('All changes saved');
+	const other = await context.newPage();
+	try {
+		await ready(other);
+		await other.getByRole('button', { name: 'New campaign', exact: true }).click();
+		await expect(other.locator('.save-status')).toHaveText('All changes saved');
+		await openSavedCampaign(other, 'Read-only reopen');
+		await page.getByLabel('Headline', { exact: false }).fill('Editing continues without a fork');
+		await expect(page.locator('.save-status')).toHaveText('All changes saved');
+		await expect(page.locator('.conflict-notice')).toHaveCount(0);
+	} finally {
+		await other.close();
+	}
+});
+
+test('a conflict notice belongs to its campaign and disappears when starting another', async ({
+	page,
+	context
+}) => {
+	await ready(page);
+	await page.getByLabel('Campaign name').fill('Conflicting campaign');
+	await page.getByLabel('Campaign name').press('Tab');
+	await expect(page.locator('.save-status')).toHaveText('All changes saved');
+	const other = await context.newPage();
+	try {
+		await ready(other);
+		await page.getByLabel('Headline', { exact: false }).fill('Changed elsewhere');
+		await expect(page.locator('.save-status')).toHaveText('All changes saved');
+		await expect(other.locator('.conflict-notice')).toBeVisible();
+		await other.getByRole('button', { name: 'New campaign', exact: true }).click();
+		await expect(other.locator('.save-status')).toHaveText('All changes saved');
+		await expect(other.locator('.conflict-notice')).toHaveCount(0);
+	} finally {
+		await other.close();
+	}
+});
+
+test('G-30: downloading a saved non-Latin campaign uses a usable project filename', async ({
+	page
+}) => {
+	await ready(page);
+	await page.getByRole('button', { name: 'New campaign', exact: true }).click();
+	await page.getByLabel('Campaign name').fill('日本語');
+	await page.getByLabel('Campaign name').press('Tab');
+	await expect(page.locator('.save-status')).toHaveText('All changes saved');
+	await page.getByRole('button', { name: /^Recent campaigns/ }).click();
+	const downloading = page.waitForEvent('download');
+	await page
+		.locator('.saved-list article')
+		.filter({ hasText: '日本語' })
+		.getByRole('button', { name: 'Download', exact: true })
+		.click();
+	const file = await downloading;
+	expect(file.suggestedFilename()).toBe('campaign.appshot.json');
+	expect(await file.failure()).toBeNull();
+});
+
 test('G-18: a batch places a capture on a visible frame instead of a pair’s hidden right source', async ({
 	page
 }) => {
@@ -136,6 +318,23 @@ test('G-18: a batch places a capture on a visible frame instead of a pair’s hi
 	await page.getByRole('button', { name: 'Select screenshot 3', exact: true }).click();
 	await expect(page.locator('.current-asset img')).toBeVisible();
 	await expect(page.locator('.current-asset')).toContainText('1290 × 2796');
+});
+
+test('a first capture on a pair’s new output keeps its draft reason on both frames', async ({
+	page
+}) => {
+	await ready(page);
+	await page.getByLabel('Active output').selectOption('ipad-13');
+	await page.getByRole('button', { name: 'Screenshots', exact: true }).click();
+	const record = page.locator('.source-record').first();
+	await record.locator('summary').click();
+	await page
+		.getByLabel('Draft override reason for screenshot 1', { exact: true })
+		.fill('Testing the pair layout only');
+	await record.getByRole('button', { name: 'Use for draft', exact: true }).click();
+	await expect(page.locator('.target-row.active')).toContainText('2/5 captures');
+	await expect(page.locator('.source-findings')).toContainText('accepted for drafts only');
+	await expect(page.locator('.source-findings')).toContainText('Testing the pair layout only');
 });
 
 test('capture records and draft reasons survive Save and Open', async ({ page }) => {

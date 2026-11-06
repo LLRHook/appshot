@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Issue, ProjectAsset, ProjectV2 } from '../model/contracts';
+import { defaultCheckSettings } from '../model/check';
 import { DEVICES, type DeviceId } from '../model/devices';
 import { defaultLinenSettings } from '../model/linen';
 import { createSlide } from '../model/studio';
@@ -665,6 +666,34 @@ describe('art-only frames and the in-use share (A10)', () => {
 });
 
 describe('copy (A12)', () => {
+	it.each([
+		{ style: 'cobalt', name: undefined, wordmark: true, warns: true },
+		{ style: 'cobalt', name: '  ', wordmark: true, warns: true },
+		{ style: 'cobalt', name: 'Billington', wordmark: true, warns: false },
+		{ style: 'the-check', name: undefined, wordmark: true, warns: true },
+		{ style: 'the-check', name: undefined, wordmark: false, warns: false },
+		{ style: 'the-check', name: 'Billington', wordmark: true, warns: false }
+	] as const)(
+		'G-23: working-title-wordmark for $style, app name $name, wordmark $wordmark',
+		async ({ style, name, wordmark, warns }) => {
+			const project = campaign();
+			const issues = await check({
+				...project,
+				style,
+				appName: name,
+				slides: project.slides.map((slide, index) => ({
+					...slide,
+					check: { ...defaultCheckSettings(index, project.slides.length), wordmark }
+				}))
+			});
+			expect(only(issues, 'working-title-wordmark')).toHaveLength(warns ? 1 : 0);
+			if (warns)
+				expect(only(issues, 'working-title-wordmark')[0]).toMatchObject({
+					severity: 'warn',
+					control: 'app-name'
+				});
+		}
+	);
 	const withCopy = (text: string, field: 'headline' | 'subtitle' | 'badge' = 'headline') => {
 		const project = campaign(['iphone-di-medium-1206x2622', 'iphone-6.9'], 1);
 		return {

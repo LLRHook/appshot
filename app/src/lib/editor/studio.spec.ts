@@ -114,6 +114,30 @@ describe('StudioController commands through the store', () => {
 				expect(slide).toMatchObject({ tilt: 0, scale: 1 });
 	});
 
+	it('The Check also straightens the stored pair before an empty output gets its first capture', () => {
+		const studio = studioWith();
+		studio.toggleLink();
+		studio.store.select(2);
+		studio.toggleLink();
+		expect(studio.store.project.panorama?.tilt).not.toBe(0);
+		studio.chooseStyle('the-check');
+		studio.chooseDevice('ipad-13');
+		studio.useAsset(studio.assets[0], 'Internal geometry test');
+		expect(studio.store.project.panorama).toMatchObject({ tilt: 0, scale: 1, offset: 0 });
+		expect(studio.composition.panorama).toMatchObject({ tilt: 0, scale: 1, offset: 0 });
+	});
+
+	it('records a first pair binding’s draft reason on the pair instead of the hidden slide source', () => {
+		const studio = studioWith();
+		studio.chooseDevice('ipad-13');
+		expect(studio.isLinked).toBe(false);
+		studio.useAsset(studio.assets[0], 'Internal draft only');
+		expect(studio.store.project.panorama?.variants?.['ipad-13']?.source?.nonNative).toEqual({
+			reason: 'Internal draft only'
+		});
+		expect(studio.store.project.slides[0].variants?.['ipad-13']?.source?.nonNative).toBeUndefined();
+	});
+
 	it('connecting The Check frames uses a straight panel and one canvas at the seam', () => {
 		const studio = studioWith();
 		studio.chooseStyle('the-check');
@@ -316,7 +340,7 @@ describe('multi-target editor commands', () => {
 		expect(studio.store.project.assets).toBe(assets);
 	});
 
-	it('keeps the working title separate from the brand printed on screenshots', () => {
+	it('G-23: keeps the working title separate from the brand printed on screenshots', () => {
 		const studio = studioWith();
 		studio.setName('Summer campaign');
 		expect(studio.store.project.name).toBe('Summer campaign');

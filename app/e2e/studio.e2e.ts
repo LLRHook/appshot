@@ -436,7 +436,7 @@ test('downloads a labelled draft ZIP of exact-size PNGs and reopens its portable
 	});
 });
 
-test('exports the selected frame at an alternate size and a contact sheet', async ({
+test('G-30: exports the selected frame with its size in the filename and a contact sheet', async ({
 	page
 }, testInfo) => {
 	await openStudio(page);

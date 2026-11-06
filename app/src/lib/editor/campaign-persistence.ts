@@ -441,26 +441,28 @@ export class CampaignPersistence implements ProjectPersistence<ProjectV2> {
 		const transaction = db.transaction(['campaigns', 'assets', 'meta'], 'readwrite');
 		const finished = committed(transaction);
 		let revision: number;
+		let changed: boolean;
 		try {
 			const campaigns = transaction.objectStore('campaigns');
 			const existing: CampaignRecord | undefined = await requested(campaigns.get(slot));
 			if (!writeAllowed(existing, this.#bases.get(slot) ?? 0, this.#instance))
 				throw new CampaignConflictError(slot, existing!.revision, existing!.updatedAt);
 			await this.#ensureBytes(transaction, document);
-			revision = (existing?.revision ?? 0) + 1;
-			const record: CampaignRecord = {
-				id: slot,
-				schema: 2,
-				revision,
-				updatedAt: Date.now(),
-				lastWriter: { instance: this.#instance, seq },
-				title: document.name,
-				frames: document.slides.length,
-				targets: document.targets.length,
-				...this.#originField(slot, existing),
-				document: text
-			};
-			campaigns.put(record);
+			changed = existing?.document !== text;
+			revision = changed ? (existing?.revision ?? 0) + 1 : existing!.revision;
+			if (changed)
+				campaigns.put({
+					id: slot,
+					schema: 2,
+					revision,
+					updatedAt: Date.now(),
+					lastWriter: { instance: this.#instance, seq },
+					title: document.name,
+					frames: document.slides.length,
+					targets: document.targets.length,
+					...this.#originField(slot, existing),
+					document: text
+				} satisfies CampaignRecord);
 			transaction.objectStore('meta').put(slot, 'active');
 		} catch (error) {
 			try {
@@ -479,12 +481,13 @@ export class CampaignPersistence implements ProjectPersistence<ProjectV2> {
 		}
 		this.#bases.set(slot, revision);
 		if ((this.#seqs.get(slot) ?? 0) <= seq) storageRemove(local, journalKey(this.#instance, slot));
-		this.#channel?.postMessage({
-			instance: this.#instance,
-			campaignId: slot,
-			revision,
-			title: document.name
-		});
+		if (changed)
+			this.#channel?.postMessage({
+				instance: this.#instance,
+				campaignId: slot,
+				revision,
+				title: document.name
+			});
 	}
 
 	#originField(slot: string, existing: CampaignRecord | undefined) {
@@ -960,12 +963,25 @@ export class CampaignPersistence implements ProjectPersistence<ProjectV2> {
 		return [...campaigns, ...unreadable].sort((a, b) => b.savedAt - a.savedAt);
 	}
 
-	/** Open a kept campaign for `store.replaceProject`. Further edits continue that campaign. */
-	async openRecoverable(id: string): Promise<ProjectV2> {
+	/**
+	 * Open a kept campaign for `store.replaceProject`. Before adopting another writer's newer
+	 * revision, the editor must preserve its old undo/redo documents under a separate identity.
+	 * Without that handler, refuse the refresh rather than letting stale history overwrite it.
+	 */
+	async openRecoverable(id: string, preserveHistory?: () => Promise<void>): Promise<ProjectV2> {
 		const db = await this.#db();
 		const record = await this.#readRecord(db, id);
 		if (!record) throw new Error('That campaign is no longer in this browser.');
 		const project = await this.#hydrate(db, record);
+		const base = this.#bases.get(id);
+		if (
+			base !== undefined &&
+			record.revision > base &&
+			record.lastWriter.instance !== this.#instance
+		) {
+			if (!preserveHistory) throw new CampaignConflictError(id, record.revision, record.updatedAt);
+			await preserveHistory();
+		}
 		this.#markOpen(record);
 		return project;
 	}

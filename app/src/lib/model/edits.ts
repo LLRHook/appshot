@@ -1,4 +1,4 @@
-import { applyCheckPatch } from './check';
+import { applyCheckPatch, CHECK_PANEL_ANCHOR } from './check';
 import type {
 	AssetId,
 	ImageLayer,
@@ -384,7 +384,11 @@ function rewriteReferences(
 	// An accepted override was about the old image, so only the same bytes may keep it.
 	const rebind = (source: SourceBinding, id: AssetId): SourceBinding =>
 		sameImage ? { ...source, asset: id } : { asset: id };
-	const slideVariant = (variant: SlideVariant): SlideVariant => {
+	const slideVariant = (
+		variant: SlideVariant,
+		target: DeviceId,
+		slide: StoredSlide
+	): SlideVariant => {
 		const rebound = { ...variant };
 		if (variant.source?.asset === assetId) {
 			if (next) rebound.source = rebind(variant.source, next.id);
@@ -403,6 +407,29 @@ function rewriteReferences(
 			if (layers.length) rebound.layers = layers;
 			else delete rebound.layers;
 		}
+		const removedLayers = new Set(
+			(variant.layers ?? [])
+				.filter((layer) => !rebound.layers?.some((kept) => kept.id === layer.id))
+				.map((layer) => layer.id)
+		);
+		const pair = project.continuityMode === 'paired' ? project.panorama : undefined;
+		const pairSource =
+			pair && (pair.leftId === slide.id || pair.rightId === slide.id)
+				? pair.variants?.[target]?.source
+				: undefined;
+		const panelRemoved = !next && (pairSource ?? variant.source)?.asset === assetId;
+		const settings = applyCheckPatch(slide.check, variant.check);
+		const markRemoved =
+			settings?.mark &&
+			(removedLayers.has(settings.mark.anchor) ||
+				(panelRemoved && settings.mark.anchor === CHECK_PANEL_ANCHOR));
+		const tearRemoved = settings?.tear && removedLayers.has(settings.tear);
+		if (markRemoved || tearRemoved)
+			rebound.check = {
+				...variant.check,
+				...(markRemoved ? { mark: null } : {}),
+				...(tearRemoved ? { tear: null } : {})
+			};
 		return rebound;
 	};
 	const panoramaVariant = (variant: PanoramaVariant): PanoramaVariant => {
@@ -414,11 +441,11 @@ function rewriteReferences(
 	};
 	const rewriteAll = <T extends object>(
 		variants: Partial<Record<DeviceId, T>> | undefined,
-		rewrite: (variant: T) => T
+		rewrite: (variant: T, target: DeviceId) => T
 	) => {
 		if (!variants) return undefined;
 		const entries = Object.entries(variants)
-			.map(([target, variant]) => [target, rewrite(variant as T)] as const)
+			.map(([target, variant]) => [target, rewrite(variant as T, target as DeviceId)] as const)
 			.filter(([, variant]) => Object.keys(variant).length);
 		return entries.length
 			? (Object.fromEntries(entries) as Partial<Record<DeviceId, T>>)
@@ -426,9 +453,22 @@ function rewriteReferences(
 	};
 	return {
 		...project,
-		slides: project.slides.map((slide) =>
-			withoutUndefined({ ...slide, variants: rewriteAll(slide.variants, slideVariant) })
-		),
+		slides: project.slides.map((slide) => {
+			// A pair can supply the panel even when the slide has no target variant of its own.
+			const pair = project.panorama;
+			const pairTargets =
+				pair && (pair.leftId === slide.id || pair.rightId === slide.id)
+					? Object.keys(pair.variants ?? {})
+					: [];
+			const variants = {
+				...Object.fromEntries(pairTargets.map((target) => [target, {}])),
+				...slide.variants
+			};
+			return withoutUndefined({
+				...slide,
+				variants: rewriteAll(variants, (variant, target) => slideVariant(variant, target, slide))
+			});
+		}),
 		...(project.panorama
 			? {
 					panorama: withoutUndefined({

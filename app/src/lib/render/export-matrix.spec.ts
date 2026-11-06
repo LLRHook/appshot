@@ -120,7 +120,7 @@ describe('a complete store export (E21)', () => {
 		expect(targetFolder(DEVICES['iphone-6.7'])).toBe('iphone-faceid-large/1284x2778-portrait');
 	});
 
-	it('names frames with no usable label sensibly', () => {
+	it('G-30: names frames with no usable label sensibly', () => {
 		const target = DEVICES['iphone-6.9'];
 		expect(
 			framePath(target, { typography: { headline: '*One* bill.\nTwo' } }, 0, 'store')

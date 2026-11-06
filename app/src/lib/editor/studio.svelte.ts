@@ -110,7 +110,12 @@ export class StudioController {
 	readonly store: EditorStore<ProjectV2>;
 	readonly campaigns: CampaignPersistence | undefined;
 	activeTarget = $state<DeviceId>('iphone-6.9');
-	conflict = $state.raw<ExternalChange | null>(null);
+	#conflict = $state.raw<ExternalChange | null>(null);
+	readonly conflict = $derived.by(() =>
+		this.#conflict?.campaignId === this.campaigns?.campaignIdOf(this.store.project)
+			? this.#conflict
+			: null
+	);
 	recoverable = $state.raw<RecoverableItem[]>([]);
 	recoveryOpen = $state(false);
 	inspectorTab = $state<'content' | 'device'>('content');
@@ -227,7 +232,7 @@ export class StudioController {
 			historyLimit: CAMPAIGN_HISTORY_LIMIT,
 			onSaveFailed: (error) => {
 				if (error instanceof CampaignConflictError) {
-					this.conflict = {
+					this.#conflict = {
 						campaignId: error.campaignId,
 						revision: error.storedRevision,
 						title: this.store.project.name
@@ -247,8 +252,8 @@ export class StudioController {
 	/** Restore the saved campaign. Returns the teardown for `onMount`. */
 	start(): () => void {
 		const unsubscribe = this.campaigns?.onExternalChange((change) => {
-			if (!this.store.project.campaignId || change.campaignId === this.store.project.campaignId)
-				this.conflict = change;
+			if (change.campaignId === this.campaigns!.campaignIdOf(this.store.project))
+				this.#conflict = change;
 		});
 		void this.store.restore().then((result) => {
 			if (result.status === 'failed')
@@ -318,6 +323,7 @@ export class StudioController {
 	#replace(next: ProjectV2): boolean {
 		const result = this.store.replaceProject(next);
 		if (result.status === 'rejected') this.error = result.reason;
+		else this.#conflict = null;
 		return result.status !== 'rejected';
 	}
 
@@ -496,6 +502,9 @@ export class StudioController {
 			// cannot inherit a previous style's tilt while the current output happens to be straight.
 			let next: ProjectV2 = {
 				...this.store.project,
+				...(this.store.project.panorama
+					? { panorama: { ...this.store.project.panorama, offset: 0, scale: 1, tilt: 0 } }
+					: {}),
 				slides: this.store.project.slides.map((slide) => ({ ...slide, tilt: 0, scale: 1 }))
 			};
 			for (const target of next.targets)
@@ -739,15 +748,15 @@ export class StudioController {
 		}
 		let next = applyProjectedEdit(this.store.project, this.targetId, this.#withImage(image));
 		const pair = next.panorama;
-		if (
+		const inPair = Boolean(
 			pair &&
 			next.continuityMode === 'paired' &&
 			(pair.leftId === this.slide.id || pair.rightId === this.slide.id)
-		)
-			next = bindPanoramaSource(next, this.targetId, image.id);
+		);
+		if (inPair) next = bindPanoramaSource(next, this.targetId, image.id);
 		if (draftReason?.trim()) {
 			const reason = draftReason.trim().slice(0, 200);
-			next = this.isLinked
+			next = inPair
 				? patchPanoramaVariant(next, this.targetId, {
 						source: { asset: image.id, nonNative: { reason } }
 					})
@@ -976,9 +985,29 @@ export class StudioController {
 		this.processing = true;
 		try {
 			await this.store.flush();
-			if (this.#replace(await this.campaigns.openRecoverable(id))) {
+			let preserved = false;
+			const project = await this.campaigns.openRecoverable(id, async () => {
+				const older = this.store.findDocument(
+					(document) => this.campaigns!.campaignIdOf(document) === id
+				);
+				if (!older) return;
+				const copy = this.campaigns!.keepAsCopy(older);
+				this.store.remapDocuments((document) =>
+					this.campaigns!.campaignIdOf(document) === id
+						? { ...document, campaignId: copy.campaignId }
+						: document
+				);
+				await this.campaigns!.save(copy);
+				await this.store.flush();
+				preserved = true;
+			});
+			if (this.#replace(project)) {
 				this.recoveryOpen = false;
-				this.notify('Saved campaign opened.');
+				this.notify(
+					preserved
+						? 'Saved campaign opened. Your earlier edits are kept as a separate campaign.'
+						: 'Saved campaign opened.'
+				);
 			}
 		} catch (error) {
 			this.error = error instanceof Error ? error.message : 'Could not open that campaign.';
@@ -1020,7 +1049,7 @@ export class StudioController {
 	}
 
 	async keepConflictCopy() {
-		if (!this.campaigns || this.processing) return;
+		if (!this.campaigns || this.processing || !this.conflict) return;
 		this.processing = true;
 		try {
 			await this.store.flush();
@@ -1033,7 +1062,7 @@ export class StudioController {
 			);
 			await this.store.flush();
 			if (this.store.status === 'saved') {
-				this.conflict = null;
+				this.#conflict = null;
 				this.notify(
 					'Your edits are saved as a separate campaign. The other tab’s campaign is kept.'
 				);

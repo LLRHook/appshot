@@ -45,7 +45,6 @@
 							<div
 								class="style-type"
 								class:serif={style.id === 'paper' || style.id === 'table-linen'}
-								class:mono={style.id === 'terminal'}
 							>
 								<span
 									>{style.id === 'paper'

@@ -153,6 +153,16 @@ export class EditorStore<D extends EditorDocument> {
 		this.#scheduleSave();
 	}
 
+	/** The current or nearest undo/redo document matching a save identity, without changing history. */
+	findDocument(matches: (document: D) => boolean): D | undefined {
+		if (matches(this.#project)) return this.#project;
+		for (const history of [this.#past, this.#future]) {
+			for (let index = history.length - 1; index >= 0; index--)
+				if (matches(history[index].project)) return history[index].project;
+		}
+		return undefined;
+	}
+
 	/** Change the edited frame. Selection alone is not an undo step, but it ends the open one. */
 	select(index: number): void {
 		this.checkpoint();
