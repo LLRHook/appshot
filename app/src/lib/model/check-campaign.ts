@@ -133,7 +133,7 @@ const FRAMES: readonly FrameCopy[] = [
 		canvas: 'gold',
 		preset: 'hero',
 		headline: 'Add the bill.\n*Skip the math.*',
-		support: 'Enter tax and tip. Billington adds it up.'
+		support: 'Billington adds up subtotal, tax and tip.'
 	}
 ];
 
@@ -146,24 +146,33 @@ const LARGE: Record<string, FrameGeometry> = {
 				id: 'shares',
 				crop: { x: 77, y: 1478, width: 1060, height: 1082 },
 				x: 24,
-				y: 1430,
+				y: 1471,
 				scale: 1.2,
 				radius: 72,
 				shadow: 'dramatic'
 			},
 			{
 				id: 'total',
-				crop: { x: 275, y: 385, width: 771, height: 360 },
+				crop: { x: 275, y: 385, width: 771, height: 385 },
 				x: 24,
 				y: 896,
 				scale: 1.65,
 				radius: 72,
 				shadow: 'soft'
+			},
+			{
+				id: 'share',
+				crop: { x: 885, y: 1587, width: 242, height: 134 },
+				x: 952,
+				y: 1587,
+				scale: 1.42,
+				radius: 56,
+				shadow: 'soft'
 			}
 		],
 		mark: {
 			kind: 'ring',
-			anchor: 'shares',
+			anchor: 'share',
 			rect: { x: 924, y: 1630, width: 165, height: 48 },
 			seed: 11
 		}
@@ -174,19 +183,21 @@ const LARGE: Record<string, FrameGeometry> = {
 			{
 				id: 'people',
 				scene: 'entry',
-				crop: { x: 60, y: 402, width: 707, height: 240 },
-				x: 24,
-				y: 860,
-				scale: 1.799,
+				crop: { x: 80, y: 402, width: 667, height: 240 },
+				x: 32,
+				y: 844,
+				scale: 1.883,
 				radius: 72,
 				shadow: 'soft'
 			},
 			{
+				// The list's fork tiles and dots stay out of the crop, which puts dish names on the
+				// headline's margin. The last row is a text-free peek, so the list visibly runs on.
 				id: 'dishes',
-				crop: { x: 24, y: 733, width: 1272, height: 1517 },
-				x: 24,
-				y: 1351,
-				scale: 1,
+				crop: { x: 228, y: 533, width: 1052, height: 1175 },
+				x: 32,
+				y: 1466,
+				scale: 1.1939,
 				radius: 64,
 				shadow: 'soft'
 			}
@@ -212,7 +223,7 @@ const LARGE: Record<string, FrameGeometry> = {
 			{
 				id: 'share',
 				crop: { x: 985, y: 818, width: 181, height: 103 },
-				x: 848,
+				x: 851,
 				y: 1236,
 				scale: 2.46,
 				radius: 56,
@@ -288,19 +299,20 @@ const LARGE: Record<string, FrameGeometry> = {
 				shadow: 'dramatic'
 			},
 			{
+				// Total's own value at a larger scale, on its label's baseline and the amounts' right edge.
+				// It carries no shadow, so no plate shows on the white card.
 				id: 'grand-total',
-				crop: { x: 972, y: 2364, width: 232, height: 74 },
-				x: 756,
-				y: 2584,
+				crop: { x: 971, y: 2375, width: 232, height: 69 },
+				x: 759,
+				y: 2589,
 				scale: 2.2,
-				radius: 44,
-				shadow: 'soft'
+				radius: 40
 			}
 		],
 		mark: {
-			kind: 'ring',
+			kind: 'underline',
 			anchor: 'grand-total',
-			rect: { x: 984, y: 2381, width: 206, height: 41 },
+			rect: { x: 989, y: 2382, width: 196, height: 36 },
 			seed: 17
 		}
 	}
@@ -315,27 +327,36 @@ const MEDIUM: Record<string, FrameGeometry> = {
 				id: 'shares',
 				crop: { x: 73, y: 1228, width: 952, height: 1082 },
 				x: 22,
-				y: 1234,
+				y: 1250,
 				scale: 1.2206,
 				radius: 66,
 				shadow: 'dramatic'
 			},
 			{
-				// This class's result capture is scrolled under the bar, so the whole card comes from
-				// the same bill's breakdown capture.
+				// This class's result capture is scrolled under the bar, so the whole card comes from the
+				// same bill's breakdown capture.
 				id: 'total',
 				scene: 'breakdown',
-				crop: { x: 188, y: 385, width: 830, height: 360 },
+				crop: { x: 188, y: 385, width: 830, height: 382 },
 				x: 22,
-				y: 790,
+				y: 775,
 				scale: 1.4,
 				radius: 66,
+				shadow: 'soft'
+			},
+			{
+				id: 'share',
+				crop: { x: 771, y: 1337, width: 243, height: 134 },
+				x: 839,
+				y: 1370,
+				scale: 1.42,
+				radius: 52,
 				shadow: 'soft'
 			}
 		],
 		mark: {
 			kind: 'ring',
-			anchor: 'shares',
+			anchor: 'share',
 			rect: { x: 810, y: 1380, width: 165, height: 48 },
 			seed: 11
 		}
@@ -345,19 +366,21 @@ const MEDIUM: Record<string, FrameGeometry> = {
 			{
 				id: 'people',
 				scene: 'entry',
-				crop: { x: 60, y: 401, width: 707, height: 240 },
-				x: 22,
-				y: 681,
-				scale: 1.6436,
+				crop: { x: 80, y: 401, width: 667, height: 240 },
+				x: 24,
+				y: 688,
+				scale: 1.736,
 				radius: 66,
 				shadow: 'soft'
 			},
 			{
+				// As on the large phone: dish names on the headline's margin, the last row a text-free
+				// peek.
 				id: 'dishes',
-				crop: { x: 24, y: 739, width: 1158, height: 1501 },
+				crop: { x: 228, y: 533, width: 938, height: 1172 },
 				x: 24,
-				y: 1121,
-				scale: 1,
+				y: 1176,
+				scale: 1.2345,
 				radius: 58,
 				shadow: 'soft'
 			}
@@ -373,9 +396,9 @@ const MEDIUM: Record<string, FrameGeometry> = {
 		layers: [
 			{
 				id: 'dialog',
-				crop: { x: 61, y: 303, width: 1084, height: 1797 },
+				crop: { x: 61, y: 305, width: 1084, height: 1795 },
 				x: 22,
-				y: 696,
+				y: 698,
 				scale: 1.072,
 				radius: 66,
 				shadow: 'dramatic'
@@ -383,7 +406,7 @@ const MEDIUM: Record<string, FrameGeometry> = {
 			{
 				id: 'share',
 				crop: { x: 876, y: 793, width: 182, height: 103 },
-				x: 768,
+				x: 773,
 				y: 1158,
 				scale: 2.26,
 				radius: 52,
@@ -432,9 +455,9 @@ const MEDIUM: Record<string, FrameGeometry> = {
 			{
 				id: 'tax',
 				scene: 'entry',
-				crop: { x: 60, y: 1500, width: 1086, height: 258 },
+				crop: { x: 60, y: 1490, width: 1086, height: 268 },
 				x: 22,
-				y: 680,
+				y: 669,
 				scale: 1.07,
 				radius: 58,
 				shadow: 'soft'
@@ -460,18 +483,17 @@ const MEDIUM: Record<string, FrameGeometry> = {
 			},
 			{
 				id: 'grand-total',
-				crop: { x: 858, y: 2356, width: 232, height: 74 },
-				x: 690,
-				y: 2300,
+				crop: { x: 857, y: 2364, width: 232, height: 71 },
+				x: 668,
+				y: 2303,
 				scale: 2.1,
-				radius: 42,
-				shadow: 'soft'
+				radius: 38
 			}
 		],
 		mark: {
-			kind: 'ring',
+			kind: 'underline',
 			anchor: 'grand-total',
-			rect: { x: 875, y: 2372, width: 196, height: 42 },
+			rect: { x: 875, y: 2374, width: 196, height: 36 },
 			seed: 17
 		}
 	}
@@ -479,45 +501,44 @@ const MEDIUM: Record<string, FrameGeometry> = {
 
 /**
  * Native 2064 × 2752 captures. Billington's iPad UI is a stretched phone layout, shown as it is: a
- * row's name and amount sit nearly 2000 px apart, so a whole row can never grow. Each frame's real
- * element is lifted far past its size in the app instead, and the people and their shares are two
- * aligned crops of the same rows, with the blank middle of each row left out and a gap between them.
+ * row's name and amount sit nearly 2000 px apart, so a whole row can never grow. The result list stays
+ * one real card at full width with its ringed share lifted, and the dish list enlarges the left of
+ * each row, with the real end of the ringed person's row lifted onto it to say who.
  */
 const TABLET: Record<string, FrameGeometry> = {
 	result: {
-		fontScale: 0.92,
 		layers: [
 			{
-				id: 'total',
-				crop: { x: 708, y: 205, width: 646, height: 223 },
-				x: 95,
-				y: 925,
-				scale: 2.9,
-				radius: 64,
-				shadow: 'soft'
-			},
-			{
-				id: 'people',
-				crop: { x: 48, y: 951, width: 790, height: 725 },
-				x: 95,
-				y: 1596,
-				scale: 1.5,
-				radius: 64,
-				shadow: 'soft'
-			},
-			{
 				id: 'shares',
-				crop: { x: 1500, y: 951, width: 445, height: 725 },
-				x: 1300,
-				y: 1596,
-				scale: 1.5,
+				crop: { x: 52, y: 945, width: 1893, height: 731 },
+				x: 42,
+				y: 1842,
+				scale: 1.046,
 				radius: 64,
+				shadow: 'dramatic'
+			},
+			{
+				id: 'total',
+				crop: { x: 689, y: 172, width: 683, height: 297 },
+				x: 42,
+				y: 1005,
+				scale: 2.899,
+				radius: 64,
+				shadow: 'soft'
+			},
+			{
+				id: 'share',
+				crop: { x: 1771, y: 993, width: 168, height: 100 },
+				x: 1501,
+				y: 1765,
+				scale: 3.1,
+				radius: 60,
 				shadow: 'soft'
 			}
 		],
 		mark: {
 			kind: 'ring',
-			anchor: 'shares',
+			anchor: 'share',
 			rect: { x: 1796, y: 1023, width: 118, height: 40 },
 			seed: 11
 		}
@@ -527,20 +548,31 @@ const TABLET: Record<string, FrameGeometry> = {
 			{
 				id: 'people',
 				scene: 'entry',
-				crop: { x: 57, y: 207, width: 438, height: 160 },
-				x: 42,
-				y: 965,
+				crop: { x: 57, y: 207, width: 633, height: 160 },
+				x: 82,
+				y: 956,
 				scale: 3,
 				radius: 64,
 				shadow: 'soft'
 			},
 			{
 				id: 'dishes',
-				crop: { x: 12, y: 421, width: 2040, height: 1212 },
-				x: 42,
-				y: 1470,
-				scale: 0.97,
+				crop: { x: 155, y: 426, width: 974, height: 654 },
+				x: 82,
+				y: 1477,
+				scale: 1.95,
 				radius: 60,
+				shadow: 'soft'
+			},
+			{
+				// The real end of Leo's own row: its share and avatar, with the blank middle of the row
+				// left out and the lift plainly a lift.
+				id: 'owner',
+				crop: { x: 1855, y: 870, width: 155, height: 125 },
+				x: 1632,
+				y: 2332,
+				scale: 1.95,
+				radius: 40,
 				shadow: 'soft'
 			}
 		],
@@ -555,19 +587,20 @@ const TABLET: Record<string, FrameGeometry> = {
 		layers: [
 			{
 				id: 'dialog',
-				crop: { x: 104, y: 481, width: 1857, height: 1630 },
-				x: 66,
-				y: 997,
+				crop: { x: 104, y: 483, width: 1855, height: 1628 },
+				x: 64,
+				y: 999,
 				scale: 1.04,
 				radius: 60,
 				shadow: 'dramatic'
 			},
 			{
+				// This lift covers the row's plus icon outright and stays clear of the bar above it.
 				id: 'share',
-				crop: { x: 1781, y: 808, width: 121, height: 68 },
-				x: 1540,
-				y: 1228,
-				scale: 3.6,
+				crop: { x: 1777, y: 806, width: 129, height: 75 },
+				x: 1589,
+				y: 1262,
+				scale: 3.4,
 				radius: 60,
 				shadow: 'soft'
 			}
@@ -603,9 +636,9 @@ const TABLET: Record<string, FrameGeometry> = {
 			{
 				// Item rows here are too close together to ring one, so Leo's share carries the mark.
 				id: 'share',
-				crop: { x: 1781, y: 1010, width: 147, height: 65 },
-				x: 1640,
-				y: 504,
+				crop: { x: 1772, y: 998, width: 165, height: 90 },
+				x: 1620,
+				y: 490,
 				scale: 2.4,
 				radius: 44,
 				shadow: 'soft'
@@ -625,7 +658,7 @@ const TABLET: Record<string, FrameGeometry> = {
 				scene: 'entry',
 				crop: { x: 32, y: 649, width: 2000, height: 462 },
 				x: 37,
-				y: 960,
+				y: 990,
 				scale: 0.995,
 				radius: 56,
 				shadow: 'soft'
@@ -635,34 +668,35 @@ const TABLET: Record<string, FrameGeometry> = {
 				scene: 'entry',
 				crop: { x: 32, y: 1152, width: 2000, height: 551 },
 				x: 37,
-				y: 1440,
+				y: 1482,
 				scale: 0.995,
 				radius: 56,
 				shadow: 'soft'
 			},
 			{
+				// The crop runs on into the real white under the card, which holds the pen mark without a
+				// tab.
 				id: 'summary',
-				crop: { x: 48, y: 2093, width: 1968, height: 411 },
+				crop: { x: 48, y: 2093, width: 1968, height: 433 },
 				x: 37,
-				y: 2010,
+				y: 2062,
 				scale: 1.011,
 				radius: 56,
 				shadow: 'dramatic'
 			},
 			{
 				id: 'grand-total',
-				crop: { x: 1808, y: 2400, width: 196, height: 80 },
-				x: 1361,
-				y: 2285,
-				scale: 3.4,
-				radius: 60,
-				shadow: 'soft'
+				crop: { x: 1823, y: 2425, width: 162, height: 48 },
+				x: 1501,
+				y: 2339,
+				scale: 3.2,
+				radius: 40
 			}
 		],
 		mark: {
-			kind: 'ring',
+			kind: 'underline',
 			anchor: 'grand-total',
-			rect: { x: 1843, y: 2427, width: 131, height: 28 },
+			rect: { x: 1843, y: 2428, width: 131, height: 24 },
 			seed: 17
 		}
 	}
@@ -672,29 +706,30 @@ const TABLET: Record<string, FrameGeometry> = {
  * Native 1398 × 2034 captures. On the outer display the system status column sits beside and
  * sometimes over the phone layout, which is the app's real behaviour today. Crops show real UI clear
  * of it, and nothing is retouched. This display's result captures scroll the bill's total card away,
- * so frame 1's total is the same bill's Total Bill figure from the assignment screen.
+ * so frame 1's total is the same bill's Total from Bill Summary.
  */
 const DUO_OUTER: Record<string, FrameGeometry> = {
 	result: {
+		fontScale: 1.1,
 		layers: [
 			{
-				id: 'total',
-				scene: 'assign',
-				crop: { x: 34, y: 1848, width: 256, height: 80 },
-				x: 785,
-				y: 300,
-				scale: 2.3,
-				radius: 48,
-				shadow: 'soft'
-			},
-			{
 				id: 'shares',
-				crop: { x: 52, y: 642, width: 1038, height: 1058 },
-				x: 55,
-				y: 640,
-				scale: 1.24,
+				crop: { x: 72, y: 695, width: 913, height: 995 },
+				x: 84,
+				y: 650,
+				scale: 1.35,
 				radius: 60,
 				shadow: 'dramatic'
+			},
+			{
+				id: 'total',
+				scene: 'summary',
+				crop: { x: 1050, y: 1532, width: 232, height: 74 },
+				x: 714,
+				y: 312,
+				scale: 2.6,
+				radius: 48,
+				shadow: 'soft'
 			}
 		],
 		mark: {
@@ -710,19 +745,21 @@ const DUO_OUTER: Record<string, FrameGeometry> = {
 			{
 				id: 'people',
 				scene: 'entry',
-				crop: { x: 60, y: 219, width: 707, height: 226 },
-				x: 24,
-				y: 677,
-				scale: 1.909,
+				crop: { x: 80, y: 219, width: 667, height: 226 },
+				x: 28,
+				y: 670,
+				scale: 2.012,
 				radius: 64,
 				shadow: 'soft'
 			},
 			{
+				// Rows 2 and 3, whose people differ in color here; row 1's Maya and row 2's Nora share one.
+				// A text-free peek of row 4 shows the list runs on.
 				id: 'dishes',
-				crop: { x: 32, y: 549, width: 1334, height: 904 },
-				x: 24,
-				y: 1120,
-				scale: 1.012,
+				crop: { x: 234, y: 832, width: 1090, height: 690 },
+				x: 0,
+				y: 1150,
+				scale: 1.2826,
 				radius: 56,
 				shadow: 'soft'
 			}
@@ -738,11 +775,11 @@ const DUO_OUTER: Record<string, FrameGeometry> = {
 		layers: [
 			{
 				id: 'dialog',
-				crop: { x: 48, y: 151, width: 1050, height: 1289 },
-				x: 123,
-				y: 620,
+				crop: { x: 50, y: 156, width: 1046, height: 1285 },
+				x: 125,
+				y: 625,
 				scale: 1.097,
-				radius: 56,
+				radius: 60,
 				shadow: 'dramatic'
 			},
 			{
@@ -790,7 +827,7 @@ const DUO_OUTER: Record<string, FrameGeometry> = {
 				crop: { x: 60, y: 1100, width: 1278, height: 470 },
 				x: 24,
 				y: 640,
-				scale: 1.05,
+				scale: 1.0563,
 				radius: 56,
 				shadow: 'soft'
 			},
@@ -805,51 +842,63 @@ const DUO_OUTER: Record<string, FrameGeometry> = {
 			},
 			{
 				id: 'grand-total',
-				crop: { x: 1050, y: 1532, width: 232, height: 74 },
-				x: 810,
-				y: 1640,
+				crop: { x: 1049, y: 1545, width: 232, height: 70 },
+				x: 837,
+				y: 1656,
 				scale: 2.2,
-				radius: 44,
-				shadow: 'soft'
+				radius: 40
 			}
 		],
 		mark: {
-			kind: 'ring',
+			kind: 'underline',
 			anchor: 'grand-total',
-			rect: { x: 1067, y: 1549, width: 196, height: 42 },
+			rect: { x: 1067, y: 1551, width: 196, height: 37 },
 			seed: 17
 		}
 	}
 };
 
-/** Native 2007 × 2853 captures of the open display. The phone layout fills the safe area. */
+/**
+ * Native 2007 × 2853 captures of the open display. The phone layout fills the safe area, so a dish
+ * row's name and avatar sit about 1500 px apart. The dish list enlarges the left of each row, with
+ * the real end of the ringed person's row lifted onto it to say who.
+ */
 const DUO_INNER: Record<string, FrameGeometry> = {
 	result: {
 		fontScale: 1.2,
 		layers: [
 			{
 				id: 'shares',
-				crop: { x: 36, y: 1445, width: 1935, height: 1082 },
+				crop: { x: 66, y: 1500, width: 1766, height: 1040 },
 				x: 36,
-				y: 1624,
-				scale: 1,
+				y: 1660,
+				scale: 1.096,
 				radius: 76,
 				shadow: 'dramatic'
 			},
 			{
 				id: 'total',
 				scene: 'breakdown',
-				crop: { x: 494, y: 445, width: 1018, height: 360 },
+				crop: { x: 494, y: 445, width: 1018, height: 370 },
 				x: 36,
-				y: 1000,
+				y: 985,
 				scale: 1.9,
 				radius: 76,
+				shadow: 'soft'
+			},
+			{
+				id: 'share',
+				crop: { x: 1575, y: 1555, width: 237, height: 132 },
+				x: 1511,
+				y: 1652,
+				scale: 1.94,
+				radius: 60,
 				shadow: 'soft'
 			}
 		],
 		mark: {
 			kind: 'ring',
-			anchor: 'shares',
+			anchor: 'share',
 			rect: { x: 1611, y: 1597, width: 165, height: 48 },
 			seed: 11
 		}
@@ -860,20 +909,31 @@ const DUO_INNER: Record<string, FrameGeometry> = {
 			{
 				id: 'people',
 				scene: 'entry',
-				crop: { x: 60, y: 461, width: 707, height: 240 },
-				x: 36,
-				y: 985,
-				scale: 2.737,
+				crop: { x: 62, y: 465, width: 700, height: 230 },
+				x: 41,
+				y: 969,
+				scale: 2.75,
 				radius: 76,
 				shadow: 'soft'
 			},
 			{
 				id: 'dishes',
-				crop: { x: 24, y: 791, width: 1959, height: 1214 },
-				x: 36,
-				y: 1654,
-				scale: 0.9877,
+				crop: { x: 228, y: 1094, width: 1040, height: 657 },
+				x: 41,
+				y: 1639,
+				scale: 1.85,
 				radius: 70,
+				shadow: 'soft'
+			},
+			{
+				// The real end of Leo's own row: its share and avatar, with the blank middle of the row
+				// left out and the lift plainly a lift.
+				id: 'owner',
+				crop: { x: 1692, y: 1458, width: 234, height: 170 },
+				x: 1485,
+				y: 2310,
+				scale: 1.85,
+				radius: 44,
 				shadow: 'soft'
 			}
 		],
@@ -888,18 +948,18 @@ const DUO_INNER: Record<string, FrameGeometry> = {
 		layers: [
 			{
 				id: 'dialog',
-				crop: { x: 101, y: 356, width: 1805, height: 1934 },
+				crop: { x: 101, y: 360, width: 1805, height: 1930 },
 				x: 74,
-				y: 861,
+				y: 865,
 				scale: 1.03,
 				radius: 70,
 				shadow: 'dramatic'
 			},
 			{
 				id: 'share',
-				crop: { x: 1637, y: 846, width: 182, height: 103 },
-				x: 1363,
-				y: 1225,
+				crop: { x: 1645, y: 851, width: 167, height: 95 },
+				x: 1431,
+				y: 1250,
 				scale: 3.2,
 				radius: 72,
 				shadow: 'soft'
@@ -937,9 +997,9 @@ const DUO_INNER: Record<string, FrameGeometry> = {
 			{
 				// Item rows here are too close together to ring one, so Leo's share carries the mark.
 				id: 'share',
-				crop: { x: 1583, y: 1665, width: 220, height: 96 },
+				crop: { x: 1583, y: 1652, width: 220, height: 125 },
 				x: 1461,
-				y: 804,
+				y: 773,
 				scale: 2.2,
 				radius: 52,
 				shadow: 'soft'
@@ -957,9 +1017,9 @@ const DUO_INNER: Record<string, FrameGeometry> = {
 			{
 				id: 'tax',
 				scene: 'entry',
-				crop: { x: 60, y: 1553, width: 1887, height: 265 },
+				crop: { x: 60, y: 1545, width: 1887, height: 273 },
 				x: 36,
-				y: 850,
+				y: 842,
 				scale: 1.025,
 				radius: 66,
 				shadow: 'soft'
@@ -985,18 +1045,17 @@ const DUO_INNER: Record<string, FrameGeometry> = {
 			},
 			{
 				id: 'grand-total',
-				crop: { x: 1640, y: 2330, width: 260, height: 110 },
-				x: 1400,
-				y: 2404,
+				crop: { x: 1658, y: 2361, width: 232, height: 77 },
+				x: 1436,
+				y: 2428,
 				scale: 2.2,
-				radius: 56,
-				shadow: 'soft'
+				radius: 44
 			}
 		],
 		mark: {
-			kind: 'ring',
+			kind: 'underline',
 			anchor: 'grand-total',
-			rect: { x: 1676, y: 2365, width: 196, height: 42 },
+			rect: { x: 1676, y: 2367, width: 196, height: 36 },
 			seed: 17
 		}
 	}

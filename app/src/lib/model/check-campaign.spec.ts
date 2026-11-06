@@ -67,6 +67,61 @@ const SHARE_DIGITS: Partial<Record<DeviceId, number>> = {
 	'iphone-di-medium-1206x2622': 31
 };
 
+/** Measured from each target's native captures, in source pixels. */
+const ALL_TARGETS: DeviceId[] = [
+	'iphone-6.9',
+	'iphone-di-medium-1206x2622',
+	'ipad-13',
+	'iphone-duo-outer-1398x2034',
+	'iphone-duo-inner-2007x2853'
+];
+const PHONES: DeviceId[] = ALL_TARGETS.filter((device) => device !== 'ipad-13');
+/** Tallest glyph of a dish name. */
+const DISH_GLYPH = (device: DeviceId) => (device === 'ipad-13' ? 24 : 36);
+/** Digits of a share chip. */
+const CHIP_GLYPH = (device: DeviceId) => (device === 'ipad-13' ? 20 : 30);
+/** Dish rows repeat this often. */
+const ROW_PITCH = (device: DeviceId) => (device === 'ipad-13' ? 200 : 300);
+/** Top of the first dish row a target's crop shows. */
+const FIRST_ROW: Record<string, number> = {
+	'iphone-6.9': 751,
+	'iphone-di-medium-1206x2622': 750,
+	'ipad-13': 440,
+	'iphone-duo-outer-1398x2034': 864,
+	'iphone-duo-inner-2007x2853': 1110
+};
+/** Lowest ink of the total card's digits, for targets that show the whole card. */
+const TOTAL_INK_BOTTOM: Partial<Record<DeviceId, number>> = {
+	'iphone-6.9': 715,
+	'iphone-di-medium-1206x2622': 714,
+	'ipad-13': 416,
+	'iphone-duo-inner-2007x2853': 775
+};
+/** Baseline of the Total row in each target's Bill Summary capture. */
+const TOTAL_BASELINE: Record<string, number> = {
+	'iphone-6.9': 2418,
+	'iphone-di-medium-1206x2622': 2410,
+	'ipad-13': 2452,
+	'iphone-duo-outer-1398x2034': 1588,
+	'iphone-duo-inner-2007x2853': 2403
+};
+/** Real edges of the people picker's card in each target's entry capture. */
+const PICKER_CARD: Record<string, { left: number; right: number }> = {
+	'iphone-6.9': { left: 61, right: 1259 },
+	'iphone-di-medium-1206x2622': { left: 61, right: 1145 },
+	'ipad-13': { left: 41, right: 2023 },
+	'iphone-duo-outer-1398x2034': { left: 62, right: 1336 },
+	'iphone-duo-inner-2007x2853': { left: 61, right: 1946 }
+};
+
+/** Layers lifted above another layer of the same frame. */
+const LIFTS = ['share', 'owner', 'grand-total'];
+
+const pickLayer = (device: DeviceId, frame: string, id: string) =>
+	campaign(device)
+		.slides.find((slide) => slide.id === frame)!
+		.layers!.find((layer) => layer.id === id)!;
+
 describe('Billington campaign', () => {
 	it('covers both required iPhone sizes, iPad and both iPhone Duo displays', () => {
 		expect(campaignTargets()).toEqual(
@@ -231,6 +286,139 @@ describe('Billington campaign', () => {
 				physical(SHARE_DIGITS[device]! * layer('result', 'shares').scale, device)
 			).toBeGreaterThan(10.8);
 		}
+	});
+
+	it('reads dish names at search scale, on fewer rows', () => {
+		for (const device of ALL_TARGETS) {
+			const dishes = pickLayer(device, 'assign', 'dishes');
+			const size = physical(DISH_GLYPH(device) * dishes.scale, device);
+			expect(size, device).toBeGreaterThanOrEqual(PHONES.includes(device) ? 12.5 : 8.5);
+			// Whatever the crop holds, only what stays on the frame counts as a visible row.
+			const onFrame = (DEVICES[device].height - dishes.y) / dishes.scale;
+			const shown = Math.min(dishes.crop.height, onFrame) - (FIRST_ROW[device] - dishes.crop.y);
+			expect(shown / ROW_PITCH(device), device).toBeLessThanOrEqual(3.5);
+			// The list runs off the foot, so it cannot read as complete.
+			expect(layerBounds(dishes).bottom, device).toBeGreaterThanOrEqual(DEVICES[device].height);
+		}
+	});
+
+	it('keeps the iPad people picker’s discs large', () => {
+		// A disc is 73 source pixels on iPad.
+		expect(
+			physical(73 * pickLayer('ipad-13', 'assign', 'people').scale, 'ipad-13')
+		).toBeGreaterThan(39);
+	});
+
+	it('leaves no void beside the people picker, and stays inside its real card', () => {
+		for (const device of ALL_TARGETS) {
+			const people = pickLayer(device, 'assign', 'people');
+			const { left, right } = layerBounds(people);
+			const { width } = DEVICES[device];
+			expect(left / width, device).toBeLessThanOrEqual(0.1);
+			expect((width - right) / width, device).toBeLessThanOrEqual(0.1);
+			const card = PICKER_CARD[device];
+			expect(people.crop.x, device).toBeGreaterThanOrEqual(card.left);
+			expect(people.crop.x + people.crop.width, device).toBeLessThanOrEqual(card.right);
+		}
+	});
+
+	it('shows the result as one real card with a ringed share large enough to read', () => {
+		for (const device of ALL_TARGETS) {
+			const slide = campaign(device).slides.find((item) => item.id === 'result')!;
+			const ids = slide.layers!.map((layer) => layer.id);
+			expect(ids, device).not.toContain('people');
+			expect(
+				ids.filter((id) => id === 'shares'),
+				device
+			).toHaveLength(1);
+			const ringed = slide.layers!.find((layer) => layer.id === slide.check!.mark!.anchor)!;
+			expect(physical(CHIP_GLYPH(device) * ringed.scale, device), device).toBeGreaterThanOrEqual(
+				10.98
+			);
+			// All four rows stay in the one crop, so the shares still add up to the total.
+			const { crop } = pickLayer(device, 'result', 'shares');
+			expect(crop.height, device).toBeGreaterThanOrEqual(ROW_PITCH(device) === 200 ? 725 : 995);
+		}
+	});
+
+	it('keeps the total clear of its card foot', () => {
+		for (const [device, ink] of Object.entries(TOTAL_INK_BOTTOM) as [DeviceId, number][]) {
+			const total = pickLayer(device, 'result', 'total');
+			const foot = (total.crop.y + total.crop.height - ink) * total.scale;
+			expect(foot, device).toBeGreaterThanOrEqual(60);
+		}
+	});
+
+	it('overhangs its panel on purpose or not at all', () => {
+		for (const device of ALL_TARGETS) {
+			for (const slide of campaign(device).slides) {
+				const layers = slide.layers ?? [];
+				for (const lifted of layers.filter((layer) => LIFTS.includes(layer.id))) {
+					const box = layerBounds(lifted);
+					const under = layers
+						.slice(0, layers.indexOf(lifted))
+						.map((layer) => layerBounds(layer))
+						.filter(
+							(other) =>
+								other.left < box.right &&
+								other.right > box.left &&
+								other.top < box.bottom &&
+								other.bottom > box.top
+						);
+					const name = `${device}/${slide.id}/${lifted.id}`;
+					expect(under.length, name).toBeGreaterThan(0);
+					const past = box.right - Math.max(...under.map((other) => other.right));
+					expect(past <= 1 || past >= 32, `${name} right ${past}`).toBe(true);
+					const below = box.bottom - Math.max(...under.map((other) => other.bottom));
+					expect(below <= 1 || below >= 32, `${name} foot ${below}`).toBe(true);
+				}
+			}
+		}
+	});
+
+	it('sets the entered total on its own label’s baseline, inside its card', () => {
+		for (const device of ALL_TARGETS) {
+			const summary = pickLayer(device, 'entry', 'summary');
+			const total = pickLayer(device, 'entry', 'grand-total');
+			const baseline = TOTAL_BASELINE[device];
+			const atSummary = summary.y + (baseline - summary.crop.y) * summary.scale;
+			const atTotal = total.y + (baseline - total.crop.y) * total.scale;
+			expect(Math.abs(atSummary - atTotal), device).toBeLessThanOrEqual(1);
+			expect(layerBounds(total).bottom, device).toBeLessThanOrEqual(layerBounds(summary).bottom);
+			expect(layerBounds(total).right, device).toBeLessThanOrEqual(layerBounds(summary).right);
+			const slide = campaign(device).slides.find((item) => item.id === 'entry')!;
+			expect(slide.check?.mark?.kind, device).toBe('underline');
+		}
+	});
+
+	it('squares the right edge of every entry card', () => {
+		for (const device of ALL_TARGETS) {
+			const slide = campaign(device).slides.find((item) => item.id === 'entry')!;
+			const cards = slide.layers!.filter((layer) => layer.id !== 'grand-total');
+			const edges = cards.map((layer) => layerBounds(layer).right);
+			expect(Math.max(...edges) - Math.min(...edges), device).toBeLessThanOrEqual(1);
+		}
+	});
+
+	it('claims on the entry frame only what its Bill Summary shows, on every display', () => {
+		for (const device of ALL_TARGETS) {
+			const slide = campaign(device).slides.find((item) => item.id === 'entry')!;
+			expect(slide.typography.subtitle, device).toBe('Billington adds up subtotal, tax and tip.');
+		}
+	});
+
+	it('starts every split dialog crop inside the dialog, so no dimmed backdrop shows', () => {
+		const dialogTop: Record<string, number> = {
+			'iphone-6.9': 329,
+			'iphone-di-medium-1206x2622': 304,
+			'ipad-13': 482,
+			'iphone-duo-outer-1398x2034': 153,
+			'iphone-duo-inner-2007x2853': 357
+		};
+		for (const device of ALL_TARGETS)
+			expect(pickLayer(device, 'shared', 'dialog').crop.y, device).toBeGreaterThanOrEqual(
+				dialogTop[device]
+			);
 	});
 
 	it('tells one story on every display, built only on what the release can reach', () => {
