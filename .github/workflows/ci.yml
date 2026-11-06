@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, 'feat/**', 'codex/**']
+    branches: [main, "feat/**", "codex/**"]
   pull_request:
   workflow_dispatch:
 
@@ -53,13 +53,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Browser journeys and export continuity
-        id: browser
         run: npm run test:e2e
-
-      - name: Diagnose renderer crash mechanism after a browser failure
-        if: failure() && steps.browser.outcome == 'failure'
-        timeout-minutes: 4
-        run: npx playwright test --config e2e/crash-probe.config.ts
 
       - name: Upload Playwright traces and screenshots
         if: failure()

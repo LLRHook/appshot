@@ -166,16 +166,44 @@ test.describe('a real reload inside the autosave delay', () => {
 		);
 	});
 
-	test('survives a renderer crash after the edit', async ({ context }) => {
+	test('survives a renderer crash after the edit', async ({ browser, context }, testInfo) => {
 		const page = await openPage(context);
 		await start(page);
-		const client = await context.newCDPSession(page);
-		await edit(page, 'Before the crash');
+		// Query only the browser launched by Playwright for this test. There must be no
+		// other context or page before terminating its renderer processes (including spares).
+		expect(testInfo.project.use.connectOptions).toBeUndefined();
+		expect(browser.contexts()).toEqual([context]);
+		expect(context.pages()).toEqual([page]);
+		const client = await browser.newBrowserCDPSession();
+		const { processInfo } = await client.send('SystemInfo.getProcessInfo');
+		const browserProcess = processInfo.find((entry) => entry.type === 'browser');
+		expect(browserProcess).toBeDefined();
+		const renderers = processInfo.filter((entry) => entry.type === 'renderer');
+		expect(renderers.length).toBeGreaterThan(0);
+		for (const renderer of renderers) {
+			expect(Number.isSafeInteger(renderer.id) && renderer.id > 0).toBe(true);
+			expect(renderer.id).not.toBe(process.pid);
+			expect(renderer.id).not.toBe(browserProcess?.id);
+		}
+		await testInfo.attach('renderer-processes', {
+			body: JSON.stringify({ browser: browser.version(), processInfo }),
+			contentType: 'application/json'
+		});
+		expect(await edit(page, 'Before the crash')).toBe('saving');
 		const crashed = page.waitForEvent('crash', { timeout: 10_000 });
-		// Internal crash-URL navigation can abort without crashing in CI. The protocol command
-		// targets the renderer directly; its request may reject when that renderer crashes.
-		void client.send('Page.crash').catch(() => {});
+		// Page.crash hangs even on an empty page in Linux CI. SIGKILL bypasses that
+		// injection path and prevents pagehide/unload writes while the browser stays alive.
+		for (const renderer of renderers) {
+			try {
+				process.kill(renderer.id, 'SIGKILL');
+			} catch (error) {
+				// A spare can exit between enumeration and termination. An actual page crash
+				// remains mandatory below, so an absent renderer cannot turn this into a pass.
+				if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+			}
+		}
 		await crashed;
+		expect(browser.isConnected()).toBe(true);
 		await page.close().catch(() => {});
 		const later = await openPage(context);
 		expect(await start(later)).toMatchObject({ status: 'restored', headline: 'Before the crash' });
