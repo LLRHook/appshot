@@ -211,19 +211,6 @@ const SUMMARY: Record<
 
 /** Layers lifted above another layer of the same frame. */
 const LIFTS = ['share', 'owner', 'dish', 'names', 'lines', 'grand-total'];
-/**
- * On the wide displays this one detail sits beside the real row end it comes from, which stays in
- * view: enlarged in place it would cover the rows around it or shade their amounts.
- */
-const BESIDE_ITS_TWIN = new Set([
-	'ipad-13/assign/owner',
-	'iphone-duo-inner-2007x2853/assign/owner'
-]);
-/** Left end of a row's real share bar on the wide displays, in source pixels. */
-const ROW_END_LEFT: Partial<Record<DeviceId, number>> = {
-	'ipad-13': 1869,
-	'iphone-duo-inner-2007x2853': 1714
-};
 
 const pickLayer = (device: DeviceId, frame: string, id: string) =>
 	campaign(device)
@@ -312,7 +299,6 @@ describe('Billington campaign', () => {
 						for (const under of layers.slice(0, index)) {
 							if (under.image.id !== lifted.image.id) continue;
 							const { crop } = lifted;
-							if (BESIDE_ITS_TWIN.has(`${device}/${slide.id}/${lifted.id}`)) continue;
 							const contained =
 								crop.x >= under.crop.x &&
 								crop.y >= under.crop.y &&
@@ -467,14 +453,13 @@ describe('Billington campaign', () => {
 			expect((owner.left - dish.right) / DEVICES[device].width, device).toBeGreaterThanOrEqual(
 				0.15
 			);
-			// The real end of the row stays in view beside its detail, which proves it is a detail.
-			const end = layerRegionToOutput(pickLayer(device, 'assign', 'dishes'), {
-				x: ROW_END_LEFT[device]!,
-				y: 0,
-				width: 1,
-				height: 1
-			});
-			expect(end.x - owner.right, device).toBeGreaterThanOrEqual(24);
+			const detail = pickLayer(device, 'assign', 'owner');
+			// Cover the original row end, so its avatar, percentage and progress bar appear only once.
+			const original = layerRegionToOutput(pickLayer(device, 'assign', 'dishes'), detail.crop);
+			expect(owner.left, device).toBeLessThanOrEqual(original.x);
+			expect(owner.top, device).toBeLessThanOrEqual(original.y);
+			expect(owner.right, device).toBeGreaterThanOrEqual(original.x + original.width);
+			expect(owner.bottom, device).toBeGreaterThanOrEqual(original.y + original.height);
 		}
 		for (const device of PHONES.filter((item) => item !== 'iphone-duo-inner-2007x2853'))
 			expect(
@@ -570,6 +555,16 @@ describe('Billington campaign', () => {
 			// The ringed line reads at search scale. Its digits are 20 and 30 source pixels here.
 			const digits = device === 'ipad-13' ? 20 : 30;
 			expect(physical(digits * lines.scale, device), device).toBeGreaterThanOrEqual(11);
+		}
+	});
+
+	it('runs the wide receipt behind the last enlarged item line before tearing', () => {
+		for (const device of ['ipad-13', 'iphone-duo-inner-2007x2853'] as DeviceId[]) {
+			const receipt = layerBounds(pickLayer(device, 'line-by-line', 'receipt'));
+			for (const id of ['names', 'lines']) {
+				const detail = layerBounds(pickLayer(device, 'line-by-line', id));
+				expect(receipt.bottom, `${device}/${id}`).toBeGreaterThanOrEqual(detail.bottom + 3);
+			}
 		}
 	});
 

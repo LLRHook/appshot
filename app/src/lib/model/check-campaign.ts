@@ -116,7 +116,7 @@ const FRAMES: readonly FrameCopy[] = [
 		canvas: 'teal',
 		preset: 'detail',
 		headline: 'Shared the fries?\n*Split just those.*',
-		support: 'Evenly or by percentage. Tax and tip follow.'
+		support: 'Evenly or by percentage.'
 	},
 	{
 		id: 'line-by-line',
@@ -572,14 +572,13 @@ const TABLET: Record<string, FrameGeometry> = {
 				shadow: 'soft'
 			},
 			{
-				// A detail of the same row's real end, beside the end itself: rows sit too close here to
-				// enlarge it in place. The row's blank middle stays open between the two details.
+				// The complete row end, enlarged over its original so the avatar and percentage appear once.
 				id: 'owner',
-				crop: { x: 1858, y: 874, width: 168, height: 131 },
-				x: 1270,
-				y: 1685,
-				scale: 3.2,
-				radius: 48,
+				crop: { x: 1858, y: 874, width: 168, height: 136 },
+				x: 1678.6,
+				y: 1755,
+				scale: 2.05,
+				radius: 44,
 				shadow: 'soft'
 			}
 		],
@@ -587,7 +586,7 @@ const TABLET: Record<string, FrameGeometry> = {
 			kind: 'ring',
 			anchor: 'owner',
 			rect: { x: 1950, y: 941, width: 36, height: 37 },
-			seed: 66
+			seed: 23
 		}
 	},
 	shared: {
@@ -625,7 +624,8 @@ const TABLET: Record<string, FrameGeometry> = {
 		layers: [
 			{
 				id: 'receipt',
-				crop: { x: 32, y: 168, width: 2000, height: 1312 },
+				// Paper continues behind all enlarged lines, including Tax & Tip, before it tears.
+				crop: { x: 32, y: 168, width: 2000, height: 1700 },
 				x: 40,
 				y: 84,
 				scale: 0.992,
@@ -936,13 +936,12 @@ const DUO_INNER: Record<string, FrameGeometry> = {
 				shadow: 'soft'
 			},
 			{
-				// A detail of the same row's real end, beside the end itself, so its shadow stays off the next
-				// row's amounts. The row's blank middle stays open between the two details.
+				// The complete row end at a modest scale, covering its original without reaching the next row.
 				id: 'owner',
-				crop: { x: 1700, y: 1463, width: 234, height: 193 },
-				x: 1194,
-				y: 1847,
-				scale: 2.05,
+				crop: { x: 1700, y: 1463, width: 234, height: 197 },
+				x: 1596.6,
+				y: 1888,
+				scale: 1.6,
 				radius: 48,
 				shadow: 'soft'
 			}
@@ -997,7 +996,8 @@ const DUO_INNER: Record<string, FrameGeometry> = {
 			},
 			{
 				id: 'receipt',
-				crop: { x: 50, y: 1428, width: 1907, height: 966 },
+				// Keep the receipt continuous behind the last enlarged line, above the copy.
+				crop: { x: 50, y: 1428, width: 1907, height: 1180 },
 				x: 36,
 				y: 620,
 				scale: 1.0147,
@@ -1007,7 +1007,7 @@ const DUO_INNER: Record<string, FrameGeometry> = {
 			{
 				// Each end of Leo's item lines, enlarged where it sits, with the lines' blank middle between.
 				id: 'names',
-				crop: { x: 200, y: 1950, width: 440, height: 375 },
+				crop: { x: 200, y: 1950, width: 440, height: 396 },
 				x: 36,
 				y: 1041,
 				scale: 1.95,
@@ -1016,7 +1016,7 @@ const DUO_INNER: Record<string, FrameGeometry> = {
 			},
 			{
 				id: 'lines',
-				crop: { x: 1624, y: 1950, width: 324, height: 375 },
+				crop: { x: 1624, y: 1950, width: 324, height: 396 },
 				x: 1339,
 				y: 1041,
 				scale: 1.95,
