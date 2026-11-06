@@ -23,6 +23,7 @@ import {
 } from '$lib/model/migrate';
 import { parseProject, readLegacyAutosave } from '$lib/model/project';
 import type { ProjectPersistence } from './persistence';
+import { documentsEqual } from './equal';
 
 /**
  * Where a campaign lives between sessions, and how no edit gets lost.
@@ -128,6 +129,16 @@ export function writeAllowed(
 	instance: string
 ): boolean {
 	return !record || record.revision === base || record.lastWriter.instance === instance;
+}
+
+/** Reopening rebuilds metadata objects, so property order alone is not an edit. */
+function storedDocumentsEqual(left: string, right: string): boolean {
+	if (left === right) return true;
+	try {
+		return documentsEqual(JSON.parse(left), JSON.parse(right));
+	} catch {
+		return false;
+	}
 }
 
 /* -------------------------------------------------------------------------------------- errors */
@@ -448,7 +459,7 @@ export class CampaignPersistence implements ProjectPersistence<ProjectV2> {
 			if (!writeAllowed(existing, this.#bases.get(slot) ?? 0, this.#instance))
 				throw new CampaignConflictError(slot, existing!.revision, existing!.updatedAt);
 			await this.#ensureBytes(transaction, document);
-			changed = existing?.document !== text;
+			changed = !existing || !storedDocumentsEqual(existing.document, text);
 			revision = changed ? (existing?.revision ?? 0) + 1 : existing!.revision;
 			if (changed)
 				campaigns.put({

@@ -12,7 +12,33 @@ async function openSavedCampaign(page: Page, title: string) {
 		.filter({ hasText: title })
 		.getByRole('button', { name: 'Open', exact: true })
 		.click();
+	await expect(page.locator('.recovery-dialog')).not.toBeVisible();
+	await expect(page.getByLabel('Campaign name')).toHaveValue(title);
 	await expect(page.locator('.save-status')).toHaveText('All changes saved');
+}
+
+async function readSavedCampaign(page: Page, title: string) {
+	return page.evaluate(async (title) => {
+		const db = await new Promise<IDBDatabase>((resolve, reject) => {
+			const request = indexedDB.open('appshot-campaigns', 1);
+			request.onsuccess = () => resolve(request.result);
+			request.onerror = () => reject(request.error);
+		});
+		try {
+			const rows = await new Promise<
+				{ id: string; title: string; revision: number; document: string }[]
+			>((resolve, reject) => {
+				const request = db.transaction('campaigns').objectStore('campaigns').getAll();
+				request.onsuccess = () => resolve(request.result);
+				request.onerror = () => reject(request.error);
+			});
+			const record = rows.find((row) => row.title === title);
+			if (!record) throw new Error(`Saved campaign not found: ${title}`);
+			return record;
+		} finally {
+			db.close();
+		}
+	}, title);
 }
 
 async function syntheticCapture(page: Page, width: number, height: number) {
@@ -235,17 +261,25 @@ test('reopening an advanced campaign preserves undo entries even while another c
 test('opening a saved campaign without edits does not conflict with its editing tab', async ({
 	page,
 	context
-}) => {
+}, testInfo) => {
 	await ready(page);
 	await page.getByLabel('Campaign name').fill('Read-only reopen');
 	await page.getByLabel('Campaign name').press('Tab');
 	await expect(page.locator('.save-status')).toHaveText('All changes saved');
+	const before = await readSavedCampaign(page, 'Read-only reopen');
 	const other = await context.newPage();
 	try {
 		await ready(other);
 		await other.getByRole('button', { name: 'New campaign', exact: true }).click();
 		await expect(other.locator('.save-status')).toHaveText('All changes saved');
 		await openSavedCampaign(other, 'Read-only reopen');
+		const reopened = await readSavedCampaign(other, 'Read-only reopen');
+		await testInfo.attach('read-only-reopen-records', {
+			body: JSON.stringify({ before, reopened }),
+			contentType: 'application/json'
+		});
+		expect(reopened.revision).toBe(before.revision);
+		expect(reopened.document).toBe(before.document);
 		await page.getByLabel('Headline', { exact: false }).fill('Editing continues without a fork');
 		await expect(page.locator('.save-status')).toHaveText('All changes saved');
 		await expect(page.locator('.conflict-notice')).toHaveCount(0);
