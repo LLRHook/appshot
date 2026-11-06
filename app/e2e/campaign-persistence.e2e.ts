@@ -169,9 +169,12 @@ test.describe('a real reload inside the autosave delay', () => {
 	test('survives a renderer crash after the edit', async ({ context }) => {
 		const page = await openPage(context);
 		await start(page);
+		const client = await context.newCDPSession(page);
 		await edit(page, 'Before the crash');
-		const crashed = page.waitForEvent('crash');
-		void page.goto('chrome://crash').catch(() => {});
+		const crashed = page.waitForEvent('crash', { timeout: 10_000 });
+		// Internal crash-URL navigation can abort without crashing in CI. The protocol command
+		// targets the renderer directly; its request may reject when that renderer crashes.
+		void client.send('Page.crash').catch(() => {});
 		await crashed;
 		await page.close().catch(() => {});
 		const later = await openPage(context);
