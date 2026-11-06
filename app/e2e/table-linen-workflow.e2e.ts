@@ -2,7 +2,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { tableLinenFromManifest } from '../src/lib/model/linen';
-import { parseProject } from '../src/lib/model/project';
+import { parseProjectV2 } from '../src/lib/model/migrate';
+import { projectForTarget } from '../src/lib/model/targets';
 
 async function fixture() {
 	const raw = await readFile(path.resolve('static/demo/home.png'));
@@ -45,7 +46,7 @@ async function waitForStudio(page: Page) {
 async function selectedPng(page: Page) {
 	await page.getByRole('button', { name: 'Export set' }).click();
 	const pending = page.waitForEvent('download');
-	await page.getByRole('dialog').getByRole('button', { name: 'Selected PNG' }).click();
+	await page.getByRole('dialog').getByRole('button', { name: 'Draft PNG' }).click();
 	const download = await pending;
 	const file = await download.path();
 	expect(file).toBeTruthy();
@@ -102,7 +103,8 @@ test('native Linen import edits colors and shared geometry, then survives undo, 
 	const download = await pending;
 	const file = await download.path();
 	const savedBytes = await readFile(file!);
-	const saved = parseProject(savedBytes.toString());
+	const portable = parseProjectV2(savedBytes.toString());
+	const saved = projectForTarget(portable, portable.targets[0]);
 	expect(saved.panorama?.linenPhone).toMatchObject({ centerX: 1160, top: 751, rotation: -4.8 });
 	expect(saved.slides[0].linen?.colors.canvas).toBe('#2A736E');
 	expect(saved.slides[1].linen?.colors.canvas).toBe('#FBF6EF');

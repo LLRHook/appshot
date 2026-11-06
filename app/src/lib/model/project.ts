@@ -1,59 +1,130 @@
+import { dataUrlFromBytes } from './assets';
+import { readCapture } from './capture';
+import { parseCheckSettings } from './check';
+import type { ImageLayer } from './contracts';
 import { DEVICES } from './devices';
 import { STYLES } from './studio';
-import { MAX_IMAGE_BYTES, parseImageRef } from './image';
+import { parseImageRef } from './image';
 import { parseLinenPhone, parseLinenSettings } from './linen';
-import { validateProjectSize } from './limits';
-import type { Composition, ImageRef, Slide } from './types';
+import {
+	MAX_ART_SCALE,
+	MAX_FRAMES,
+	MAX_LAYER_SCALE,
+	MAX_SLIDE_LAYERS,
+	MIN_LAYER_SCALE,
+	validateProjectSize
+} from './limits';
+export { MAX_SLIDE_LAYERS } from './limits';
+import type { Composition, ImageRef, Panorama, Slide } from './types';
 
 export const PROJECT_KEY = 'appshot-studio-project-v1';
-const INVALID_PROJECT = 'Choose a valid Appshot project with 1–10 screenshots.';
+export const INVALID_PROJECT = 'Choose a valid Appshot project with 1–10 screenshots.';
 const INVALID_SLIDE = 'The project contains an invalid screenshot.';
+const INVALID_LAYER = 'The project contains an invalid image layer.';
 
-function record(value: unknown, message = INVALID_SLIDE): Record<string, unknown> {
+export function record(value: unknown, message = INVALID_SLIDE): Record<string, unknown> {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(message);
 	return value as Record<string, unknown>;
 }
 
-function string(value: unknown, max: number, message = INVALID_SLIDE): string {
+export function string(value: unknown, max: number, message = INVALID_SLIDE): string {
 	if (typeof value !== 'string' || value.length > max) throw new Error(message);
 	return value;
 }
 
-function id(value: unknown): string {
-	const result = string(value, 200);
-	if (!result.trim()) throw new Error(INVALID_SLIDE);
+export function id(value: unknown, message = INVALID_SLIDE): string {
+	const result = string(value, 200, message);
+	if (!result.trim()) throw new Error(message);
 	return result;
 }
 
-function number(value: unknown, min: number, max: number): number {
+export function number(value: unknown, min: number, max: number): number {
 	if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) {
 		throw new Error('The project contains an invalid layout value.');
 	}
 	return value;
 }
 
-function choice<T extends string | number>(value: unknown, choices: readonly T[]): T {
+export function choice<T extends string | number>(value: unknown, choices: readonly T[]): T {
 	if (!choices.includes(value as T)) throw new Error(INVALID_SLIDE);
 	return value as T;
 }
 
-function color(value: unknown): string {
+export function color(value: unknown): string {
 	if (typeof value !== 'string' || !/^#[0-9a-f]{6}$/i.test(value)) {
 		throw new Error('The project contains an invalid color.');
 	}
 	return value;
 }
 
+export const LAYOUT_IDS = [
+	'text-above',
+	'text-below',
+	'text-left',
+	'text-right',
+	'centered',
+	'split'
+] as const;
+
 /** Shared with the Table Linen converter; see `image.ts` for the accepted formats. */
 const parseImage = (value: unknown): ImageRef => parseImageRef(value);
 
-function parseSlide(value: unknown, device: Composition['device']): Slide {
-	const slide = record(value);
-	if (slide.device !== device) throw new Error(INVALID_SLIDE);
+function wholePixel(value: unknown, min: number, max: number): number {
+	if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max)
+		throw new Error('A layer crop must be whole pixels inside its image.');
+	return value;
+}
+
+/**
+ * Validate a slide's image layers. `resolve` turns the stored image reference (an `ImageRef` in a
+ * projected document, an asset id in a stored one) into the image and its real pixel size, so a
+ * crop can never reach outside the source. Placement is one uniform scale, so nothing can stretch.
+ */
+export function parseImageLayers<TImage>(
+	value: unknown,
+	resolve: (image: unknown) => { image: TImage; naturalWidth: number; naturalHeight: number }
+): ImageLayer<TImage>[] {
+	if (!Array.isArray(value) || value.length > MAX_SLIDE_LAYERS) throw new Error(INVALID_LAYER);
+	const ids = new Set<string>();
+	return value.map((entry) => {
+		const layer = record(entry, INVALID_LAYER);
+		const layerId = id(layer.id, INVALID_LAYER);
+		if (ids.has(layerId)) throw new Error(INVALID_LAYER);
+		ids.add(layerId);
+		const { image, naturalWidth, naturalHeight } = resolve(layer.image);
+		const crop = record(layer.crop, INVALID_LAYER);
+		const x = wholePixel(crop.x, 0, naturalWidth - 1);
+		const y = wholePixel(crop.y, 0, naturalHeight - 1);
+		const kind = choice(layer.kind, ['source-crop', 'art'] as const);
+		const parsed: ImageLayer<TImage> = {
+			id: layerId,
+			kind,
+			image,
+			crop: {
+				x,
+				y,
+				width: wholePixel(crop.width, 1, naturalWidth - x),
+				height: wholePixel(crop.height, 1, naturalHeight - y)
+			},
+			x: number(layer.x, -16000, 16000),
+			y: number(layer.y, -16000, 16000),
+			scale: number(layer.scale, MIN_LAYER_SCALE, kind === 'art' ? MAX_ART_SCALE : MAX_LAYER_SCALE)
+		};
+		if (layer.rotation !== undefined) parsed.rotation = number(layer.rotation, -360, 360);
+		if (layer.radius !== undefined) parsed.radius = number(layer.radius, 0, 4000);
+		if (layer.shadow !== undefined)
+			parsed.shadow = choice(layer.shadow, ['none', 'soft', 'dramatic'] as const);
+		if (layer.sampling !== undefined)
+			parsed.sampling = choice(layer.sampling, ['smooth', 'pixelated'] as const);
+		return parsed;
+	});
+}
+
+/** Fields every project version shares, up to where a v1 slide stores its image. */
+export function parseSlideCopy(slide: Record<string, unknown>) {
 	const background = record(slide.background);
 	const typography = record(slide.typography);
 	const effects = record(slide.effects);
-	const continuity = record(slide.continuity);
 	if (
 		!Array.isArray(background.colors) ||
 		background.colors.length < 1 ||
@@ -63,7 +134,6 @@ function parseSlide(value: unknown, device: Composition['device']): Slide {
 	}
 	return {
 		id: id(slide.id),
-		device,
 		...(slide.label !== undefined ? { label: string(slide.label, 200) } : {}),
 		background: {
 			kind: choice(background.kind, ['solid', 'linear', 'radial', 'mesh'] as const),
@@ -72,14 +142,7 @@ function parseSlide(value: unknown, device: Composition['device']): Slide {
 			...(background.noise !== undefined ? { noise: number(background.noise, 0, 1) } : {})
 		},
 		frame: choice(slide.frame, ['bezel', 'clay', 'wireframe', 'none'] as const),
-		layout: choice(slide.layout, [
-			'text-above',
-			'text-below',
-			'text-left',
-			'text-right',
-			'centered',
-			'split'
-		] as const),
+		layout: choice(slide.layout, LAYOUT_IDS),
 		typography: {
 			headline: string(typography.headline, 180),
 			...(typography.subtitle !== undefined ? { subtitle: string(typography.subtitle, 300) } : {}),
@@ -89,18 +152,72 @@ function parseSlide(value: unknown, device: Composition['device']): Slide {
 		effects: {
 			shadow: choice(effects.shadow, ['none', 'soft', 'dramatic'] as const),
 			glow: number(effects.glow, 0, 1)
-		},
+		}
+	};
+}
+
+/** Fields every project version shares, after where a v1 slide stores its image. */
+export function parseSlideTreatment(slide: Record<string, unknown>) {
+	return {
+		...(slide.tilt !== undefined ? { tilt: number(slide.tilt, -30, 30) } : {}),
+		...(slide.scale !== undefined ? { scale: number(slide.scale, 0.6, 1.4) } : {}),
+		...(slide.fontScale !== undefined ? { fontScale: number(slide.fontScale, 0.7, 1.3) } : {}),
+		...(slide.badge !== undefined ? { badge: string(slide.badge, 80) } : {}),
+		...(slide.linen !== undefined ? { linen: parseLinenSettings(slide.linen) } : {}),
+		...(slide.check !== undefined ? { check: parseCheckSettings(slide.check) } : {})
+	};
+}
+
+function parseSlide(value: unknown, device: Composition['device']): Slide {
+	const slide = record(value);
+	if (slide.device !== device) throw new Error(INVALID_SLIDE);
+	const { id: slideId, ...copy } = parseSlideCopy(slide);
+	const continuity = record(slide.continuity);
+	return {
+		id: slideId,
+		device,
+		...copy,
 		continuity: {
 			inset: number(continuity.inset, -8000, 8000),
 			...(continuity.incoming !== undefined ? { incoming: parseImage(continuity.incoming) } : {}),
 			...(continuity.outgoing !== undefined ? { outgoing: parseImage(continuity.outgoing) } : {})
 		},
 		...(slide.primaryImage !== undefined ? { primaryImage: parseImage(slide.primaryImage) } : {}),
-		...(slide.tilt !== undefined ? { tilt: number(slide.tilt, -30, 30) } : {}),
-		...(slide.scale !== undefined ? { scale: number(slide.scale, 0.6, 1.4) } : {}),
-		...(slide.fontScale !== undefined ? { fontScale: number(slide.fontScale, 0.7, 1.3) } : {}),
-		...(slide.badge !== undefined ? { badge: string(slide.badge, 80) } : {}),
-		...(slide.linen !== undefined ? { linen: parseLinenSettings(slide.linen) } : {})
+		...parseSlideTreatment(slide),
+		...(slide.layers !== undefined
+			? {
+					layers: parseImageLayers<ImageRef>(slide.layers, (raw) => {
+						const image = parseImage(raw);
+						return {
+							image,
+							naturalWidth: image.naturalWidth,
+							naturalHeight: image.naturalHeight
+						};
+					})
+				}
+			: {})
+	};
+}
+
+/** The connected pair's fields every version shares, validated against the frame order. */
+export function parsePanoramaPlacement(
+	panorama: Record<string, unknown>,
+	slides: readonly { id: string }[]
+): Omit<Panorama, 'image'> {
+	const leftId = id(panorama.leftId);
+	const rightId = id(panorama.rightId);
+	const leftIndex = slides.findIndex((slide) => slide.id === leftId);
+	if (leftIndex < 0 || slides[leftIndex + 1]?.id !== rightId)
+		throw new Error('The connected screenshots must be adjacent and in order.');
+	return {
+		leftId,
+		rightId,
+		offset: number(panorama.offset, -400, 400),
+		scale: number(panorama.scale, 0.6, 1.4),
+		tilt: number(panorama.tilt, -30, 30),
+		...(panorama.linenPhone !== undefined
+			? { linenPhone: parseLinenPhone(panorama.linenPhone) }
+			: {})
 	};
 }
 
@@ -113,6 +230,11 @@ export function parseProject(text: string): Composition {
 	} catch {
 		throw new Error(INVALID_PROJECT);
 	}
+	return parseComposition(parsed);
+}
+
+/** `parseProject` for a value already read from JSON. */
+export function parseComposition(parsed: unknown): Composition {
 	const value = record(parsed, INVALID_PROJECT);
 	if (
 		value.version !== 1 ||
@@ -120,7 +242,7 @@ export function parseProject(text: string): Composition {
 		!Object.hasOwn(DEVICES, value.device) ||
 		!Array.isArray(value.slides) ||
 		value.slides.length < 1 ||
-		value.slides.length > 10
+		value.slides.length > MAX_FRAMES
 	) {
 		throw new Error(INVALID_PROJECT);
 	}
@@ -142,21 +264,12 @@ export function parseProject(text: string): Composition {
 	};
 	if (value.panorama !== undefined) {
 		const panorama = record(value.panorama, 'The connected composition is invalid.');
-		const leftId = id(panorama.leftId);
-		const rightId = id(panorama.rightId);
-		const leftIndex = slides.findIndex((slide) => slide.id === leftId);
-		if (leftIndex < 0 || slides[leftIndex + 1]?.id !== rightId)
-			throw new Error('The connected screenshots must be adjacent and in order.');
+		const { leftId, rightId, ...placement } = parsePanoramaPlacement(panorama, slides);
 		composition.panorama = {
 			leftId,
 			rightId,
 			image: parseImage(panorama.image),
-			offset: number(panorama.offset, -400, 400),
-			scale: number(panorama.scale, 0.6, 1.4),
-			tilt: number(panorama.tilt, -30, 30),
-			...(panorama.linenPhone !== undefined
-				? { linenPhone: parseLinenPhone(panorama.linenPhone) }
-				: {})
+			...placement
 		};
 	}
 	return composition;
@@ -238,7 +351,30 @@ export async function loadProject(): Promise<Composition | null> {
 	});
 }
 
-export function clearBrokenPanorama(composition: Composition): Composition {
+/** The legacy autosave exactly as stored, unparsed, or undefined when there is none. */
+export async function readLegacyAutosave(): Promise<unknown> {
+	const db = await database();
+	return new Promise((resolve, reject) => {
+		const request = db.transaction('projects').objectStore('projects').get(PROJECT_KEY);
+		request.onsuccess = () => {
+			db.close();
+			resolve(request.result);
+		};
+		request.onerror = () => {
+			db.close();
+			reject(request.error ?? new Error('The saved project could not be opened.'));
+		};
+	});
+}
+
+/** Disconnect a pair whose frames are no longer adjacent, for any project version. */
+export function clearBrokenPanorama<
+	T extends {
+		slides: readonly { id: string }[];
+		panorama?: { leftId: string; rightId: string };
+		continuityMode: 'none' | 'paired';
+	}
+>(composition: T): T {
 	if (!composition.panorama) return composition;
 	const index = composition.slides.findIndex((slide) => slide.id === composition.panorama!.leftId);
 	if (index < 0 || composition.slides[index + 1]?.id !== composition.panorama.rightId) {
@@ -256,30 +392,13 @@ export function download(blob: Blob, name: string) {
 	setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 
+/** Read a screenshot into an embedded image for the single-target document. */
 export async function readImage(file: File): Promise<ImageRef> {
-	if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type))
-		throw new Error('Choose a PNG, JPG, or WebP screenshot.');
-	if (file.size > MAX_IMAGE_BYTES)
-		throw new Error(`${file.name} is too large. Choose an image under 12 MB.`);
-	const url = await new Promise<string>((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onload = () => resolve(String(reader.result));
-		reader.onerror = () =>
-			reject(new Error('This screenshot could not be read. Try selecting it again.'));
-		reader.onabort = () => reject(new Error('Reading the screenshot was cancelled.'));
-		reader.readAsDataURL(file);
-	});
-	const image = new Image();
-	image.src = url;
-	try {
-		await image.decode();
-	} catch {
-		throw new Error('This image could not be opened. Choose a valid PNG, JPG, or WebP screenshot.');
-	}
+	const capture = await readCapture(file);
 	return parseImage({
 		id: crypto.randomUUID(),
-		blobUrl: url,
-		naturalWidth: image.naturalWidth,
-		naturalHeight: image.naturalHeight
+		blobUrl: dataUrlFromBytes(new Uint8Array(await capture.blob.arrayBuffer()), capture.mime),
+		naturalWidth: capture.naturalWidth,
+		naturalHeight: capture.naturalHeight
 	});
 }

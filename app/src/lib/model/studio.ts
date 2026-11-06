@@ -1,6 +1,13 @@
 import type { Composition, ImageRef, Slide } from './types';
 
-export type StyleId = 'cobalt' | 'paper' | 'midnight' | 'sorbet' | 'terminal' | 'table-linen';
+export type StyleId =
+	| 'cobalt'
+	| 'paper'
+	| 'midnight'
+	| 'sorbet'
+	| 'terminal'
+	| 'table-linen'
+	| 'the-check';
 export interface StyleDirection {
 	id: StyleId;
 	name: string;
@@ -64,6 +71,15 @@ export const STYLES: StyleDirection[] = [
 		foreground: '#FBF6EF',
 		accent: '#D4A843',
 		swatches: ['#2A736E', '#FBF6EF', '#D4A843']
+	},
+	{
+		id: 'the-check',
+		name: 'The Check',
+		description: 'Deep teal, cream and gold. Big serif, real UI, one pen mark.',
+		background: '#1E5B57',
+		foreground: '#FBF6EF',
+		accent: '#F2CE6B',
+		swatches: ['#1E5B57', '#FBF6EF', '#DDB14C']
 	}
 ];
 export function getStyle(id: StyleId): StyleDirection {

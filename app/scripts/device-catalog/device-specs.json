@@ -1,0 +1,668 @@
+{
+	"meta": {
+		"source": "https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/",
+		"accessed": "2026-11-05",
+		"page_last_modified": "Wed, 04 Nov 2026 23:20:07 GMT",
+		"count_per_device_size": {
+			"min": 1,
+			"max": 10,
+			"verbatim": "You must include at least one screenshot and can upload up to 10 screenshots per device size in .jpeg, .jpg, or .png formats"
+		},
+		"formats": [".jpeg", ".jpg", ".png"],
+		"alpha": {
+			"allowed": false,
+			"verbatim": "Images can't include alpha channels or transparencies."
+		},
+		"color_space": {
+			"documented": false,
+			"note": "No color-space, DPI, bit-depth or file-size limit on this page. 8-bit sRGB RGB is a conservative default, not an Apple-stated rule."
+		},
+		"orientation": {
+			"note": "Portrait and landscape dimensions are listed per class. The page does not state that a set must use one orientation."
+		},
+		"display_scaling_verbatim": "If your app's user interface is consistent across multiple device sizes and localizations, you only need to provide screenshots for the highest required resolution. App Store Connect automatically scales them down for smaller device sizes.",
+		"out_of_scope_platforms": {
+			"mac": ["1280x800", "1440x900", "2560x1600", "2880x1800"],
+			"apple_tv": ["1920x1080", "3840x2160"],
+			"vision_pro": ["3840x2160"],
+			"watch": ["422x514", "410x502", "416x496", "396x484", "368x448", "312x390"]
+		},
+		"compliance_caveat": "Dimensions are a file-level check only. They do not establish App Review approval, native device UI, or truthful content."
+	},
+	"classes": [
+		{
+			"id": "iphone-duo",
+			"family": "iphone",
+			"apple_label": "iPhone Duo",
+			"devices": ["iPhone Duo"],
+			"accepted_sizes": [
+				{
+					"width": 1398,
+					"height": 2034,
+					"orientation": "portrait",
+					"note": "outer display"
+				},
+				{
+					"width": 2034,
+					"height": 1398,
+					"orientation": "landscape",
+					"note": "outer display"
+				},
+				{
+					"width": 2007,
+					"height": 2853,
+					"orientation": "portrait",
+					"note": "inner display"
+				},
+				{
+					"width": 2853,
+					"height": 2007,
+					"orientation": "landscape",
+					"note": "inner display"
+				}
+			],
+			"status": "future-required",
+			"requirement_verbatim": "Starting in April 2027, screenshots will be required for any app using the iOS 27.1 SDK or later.",
+			"scaling_fallback_verbatim": null,
+			"appshot_baseline_f9b9129": "missing",
+			"billington": {
+				"status": "planned; no source exists; must not be scaled from other classes",
+				"source_capture": "Duo simulator (Xcode >= 27.1) or physical iPhone Duo"
+			},
+			"notes": "News + What's New say \"any apps or games submitted\" from April 2027 (broader). Submitting Duo screenshots triggers a product-page badge. Tech Specs list inner panel 1878x2670 at 430 ppi; ASC requires 2007x2853."
+		},
+		{
+			"id": "iphone-di-large",
+			"family": "iphone",
+			"apple_label": "iPhone with Dynamic Island (large display)",
+			"devices": [
+				"iPhone Air",
+				"iPhone 18 Pro Max",
+				"iPhone 17 Pro Max",
+				"iPhone 16 Pro Max",
+				"iPhone 16 Plus",
+				"iPhone 15 Pro Max",
+				"iPhone 15 Plus",
+				"iPhone 14 Pro Max"
+			],
+			"accepted_sizes": [
+				{
+					"width": 1260,
+					"height": 2736,
+					"orientation": "portrait"
+				},
+				{
+					"width": 2736,
+					"height": 1260,
+					"orientation": "landscape"
+				},
+				{
+					"width": 1290,
+					"height": 2796,
+					"orientation": "portrait"
+				},
+				{
+					"width": 2796,
+					"height": 1290,
+					"orientation": "landscape"
+				},
+				{
+					"width": 1320,
+					"height": 2868,
+					"orientation": "portrait"
+				},
+				{
+					"width": 2868,
+					"height": 1320,
+					"orientation": "landscape"
+				}
+			],
+			"status": "optional",
+			"requirement_verbatim": null,
+			"scaling_fallback_verbatim": "If screenshots with the accepted sizes aren't provided, scaled screenshots for iPhone with Face ID (large display) are used.",
+			"appshot_baseline_f9b9129": "1320x2868 only",
+			"billington": {
+				"status": "recommended",
+				"target": "1320x2868",
+				"source_capture": "iPhone 17 Pro Max simulator"
+			},
+			"notes": "Providing it also discharges the conditional requirement on Face ID (large display)."
+		},
+		{
+			"id": "iphone-faceid-large",
+			"family": "iphone",
+			"apple_label": "iPhone with Face ID (large display)",
+			"devices": [
+				"iPhone 14 Plus",
+				"iPhone 13 Pro Max",
+				"iPhone 12 Pro Max",
+				"iPhone 11 Pro Max",
+				"iPhone 11",
+				"iPhone XS Max",
+				"iPhone XR"
+			],
+			"accepted_sizes": [
+				{
+					"width": 1284,
+					"height": 2778,
+					"orientation": "portrait"
+				},
+				{
+					"width": 2778,
+					"height": 1284,
+					"orientation": "landscape"
+				},
+				{
+					"width": 1242,
+					"height": 2688,
+					"orientation": "portrait"
+				},
+				{
+					"width": 2688,
+					"height": 1242,
+					"orientation": "landscape"
+				}
+			],
+			"status": "conditional",
+			"requirement_verbatim": "Required if app runs on iPhone and screenshots for iPhone with Dynamic Island (large display) aren't provided",
+			"scaling_fallback_verbatim": "If screenshots with the accepted sizes aren't provided, scaled screenshots for iPhone with Dynamic Island (large display) are used.",
+			"appshot_baseline_f9b9129": "1284x2778 only (key iphone-6.7, label 6.5\")",
+			"billington": {
+				"status": "not needed when 1320x2868 is supplied"
+			},
+			"notes": null
+		},
+		{
+			"id": "iphone-di-medium",
+			"family": "iphone",
+			"apple_label": "iPhone with Dynamic Island (medium display)",
+			"devices": [
+				"iPhone 18 Pro",
+				"iPhone 17 Pro",
+				"iPhone 17",
+				"iPhone 16 Pro",
+				"iPhone 16",
+				"iPhone 15 Pro",
+				"iPhone 15",
+				"iPhone 14 Pro"
+			],
+			"accepted_sizes": [
+				{
+					"width": 1179,
+					"height": 2556,
+					"orientation": "portrait"
+				},
+				{
+					"width": 2556,
+					"height": 1179,
+					"orientation": "landscape"
+				},
+				{
+					"width": 1206,
+					"height": 2622,
+					"orientation": "portrait"
+				},
+				{
+					"width": 2622,
+					"height": 1206,
+					"orientation": "landscape"
+				}
+			],
+			"status": "required",
+			"requirement_verbatim": "To submit your app, you must provide screenshots for the following required display sizes: iPhone: At least one screenshot for iPhone with Dynamic Island (medium display).",
+			"scaling_fallback_verbatim": "If screenshots with the accepted sizes aren't provided, scaled screenshots for iPhone with Face ID (large display) are used.",
+			"appshot_baseline_f9b9129": "missing",
+			"billington": {
+				"status": "required; no populated source exists",
+				"target": "1206x2622",
+				"source_capture": "iPhone 17 Pro simulator"
+			},
+			"notes": "Page-internal tension: the row table gives this class a scaling fallback and makes Face ID (large) conditional on Dynamic Island (large). Supply both this class and Dynamic Island (large). Unverified in the ASC UI."
+		},
+		{
+			"id": "iphone-faceid-medium",
+			"family": "iphone",
+			"apple_label": "iPhone with Face ID (medium display)",
+			"devices": [
+				"iPhone 17e",
+				"iPhone 16e",
+				"iPhone 14",
+				"iPhone 13 Pro",
+				"iPhone 13",
+				"iPhone 13 mini",
+				"iPhone 12 Pro",
+				"iPhone 12",
+				"iPhone 12 mini",
+				"iPhone 11 Pro",
+				"iPhone XS",
+				"iPhone X"
+			],
+			"accepted_sizes": [
+				{
+					"width": 1170,
+					"height": 2532,
+					"orientation": "portrait"
+				},
+				{
+					"width": 2532,
+					"height": 1170,
+					"orientation": "landscape"
+				},
+				{
+					"width": 1125,
+					"height": 2436,
+					"orientation": "portrait"
+				},
+				{
+					"width": 2436,
+					"height": 1125,
+					"orientation": "landscape"
+				},
+				{
+					"width": 1080,
+					"height": 2340,
+					"orientation": "portrait"
+				},
+				{
+					"width": 2340,
+					"height": 1080,
+					"orientation": "landscape"
+				}
+			],
+			"status": "optional",
+			"requirement_verbatim": null,
+			"scaling_fallback_verbatim": "If screenshots with the accepted sizes aren't provided, scaled screenshots for iPhone with Dynamic Island (medium display) are used.",
+			"appshot_baseline_f9b9129": "missing",
+			"billington": {
+				"status": "scaled by ASC"
+			},
+			"notes": null
+		},
+		{
+			"id": "iphone-home-large",
+			"family": "iphone",
+			"apple_label": "iPhone with Home Button (large display)",
+			"devices": ["iPhone 8 Plus", "iPhone 7 Plus", "iPhone 6S Plus", "iPhone 6 Plus"],
+			"accepted_sizes": [
+				{
+					"width": 1242,
+					"height": 2208,
+					"orientation": "portrait"
+				},
+				{
+					"width": 2208,
+					"height": 1242,
+					"orientation": "landscape"
+				}
+			],
+			"status": "optional",
+			"requirement_verbatim": null,
+			"scaling_fallback_verbatim": "If screenshots with the accepted sizes aren't provided, scaled screenshots for iPhone with Face ID (medium display) are used.",
+			"appshot_baseline_f9b9129": "missing",
+			"billington": {
+				"status": "scaled by ASC"
+			},
+			"notes": null
+		},
+		{
+			"id": "iphone-home-medium",
+			"family": "iphone",
+			"apple_label": "iPhone with Home Button (medium display)",
+			"devices": [
+				"iPhone SE (3rd generation, 2nd generation)",
+				"iPhone 8",
+				"iPhone 7",
+				"iPhone 6S",
+				"iPhone 6"
+			],
+			"accepted_sizes": [
+				{
+					"width": 750,
+					"height": 1334,
+					"orientation": "portrait"
+				},
+				{
+					"width": 1334,
+					"height": 750,
+					"orientation": "landscape"
+				}
+			],
+			"status": "optional",
+			"requirement_verbatim": null,
+			"scaling_fallback_verbatim": "If screenshots with the accepted sizes aren't provided, scaled screenshots for iPhone with Home Button (large display) are used.",
+			"appshot_baseline_f9b9129": "missing",
+			"billington": {
+				"status": "scaled by ASC"
+			},
+			"notes": null
+		},
+		{
+			"id": "iphone-home-4in",
+			"family": "iphone",
+			"apple_label": "iPhone with Home Button (4\" display)",
+			"devices": ["iPhone SE (1st generation)", "iPhone 5S", "iPhone 5C", "iPhone 5"],
+			"accepted_sizes": [
+				{
+					"width": 640,
+					"height": 1096,
+					"orientation": "portrait",
+					"note": "portrait without status bar"
+				},
+				{
+					"width": 640,
+					"height": 1136,
+					"orientation": "portrait",
+					"note": "portrait with status bar"
+				},
+				{
+					"width": 1136,
+					"height": 600,
+					"orientation": "landscape",
+					"note": "landscape without status bar"
+				},
+				{
+					"width": 1136,
+					"height": 640,
+					"orientation": "landscape",
+					"note": "landscape with status bar"
+				}
+			],
+			"status": "optional",
+			"requirement_verbatim": null,
+			"scaling_fallback_verbatim": "If screenshots with the accepted sizes aren't provided, scaled screenshots for iPhone with Home Button (medium display) are used.",
+			"appshot_baseline_f9b9129": "missing",
+			"billington": {
+				"status": "not applicable in practice"
+			},
+			"notes": null
+		},
+		{
+			"id": "iphone-home-3.5in",
+			"family": "iphone",
+			"apple_label": "iPhone with Home Button (3.5\" display)",
+			"devices": ["iPhone 4S", "iPhone 4"],
+			"accepted_sizes": [
+				{
+					"width": 640,
+					"height": 920,
+					"orientation": "portrait",
+					"note": "portrait without status bar"
+				},
+				{
+					"width": 640,
+					"height": 960,
+					"orientation": "portrait",
+					"note": "portrait with status bar"
+				},
+				{
+					"width": 960,
+					"height": 600,
+					"orientation": "landscape",
+					"note": "landscape without status bar"
+				},
+				{
+					"width": 960,
+					"height": 640,
+					"orientation": "landscape",
+					"note": "landscape with status bar"
+				}
+			],
+			"status": "optional",
+			"requirement_verbatim": null,
+			"scaling_fallback_verbatim": "If screenshots with the accepted sizes aren't provided, scaled screenshots for iPhone with Home Button (4\" display) are used.",
+			"appshot_baseline_f9b9129": "missing",
+			"billington": {
+				"status": "not applicable in practice"
+			},
+			"notes": null
+		},
+		{
+			"id": "ipad-13",
+			"family": "ipad",
+			"apple_label": "13\" display",
+			"devices": [
+				"iPad Pro (M5, M4)",
+				"iPad Pro (6th generation, 5th generation, 4th generation, 3rd generation, 1st generation)",
+				"iPad Air (M4, M3, M2)"
+			],
+			"accepted_sizes": [
+				{
+					"width": 2064,
+					"height": 2752,
+					"orientation": "portrait"
+				},
+				{
+					"width": 2752,
+					"height": 2064,
+					"orientation": "landscape"
+				},
+				{
+					"width": 2048,
+					"height": 2732,
+					"orientation": "portrait"
+				},
+				{
+					"width": 2732,
+					"height": 2048,
+					"orientation": "landscape"
+				}
+			],
+			"status": "required-if-ipad",
+			"requirement_verbatim": "iPad (if your app supports iPadOS): At least one screenshot for iPad 13-inch display. / Required if app runs on iPad",
+			"scaling_fallback_verbatim": null,
+			"appshot_baseline_f9b9129": "2064x2752 only",
+			"billington": {
+				"status": "required: TARGETED_DEVICE_FAMILY = \"1,2\"",
+				"target": "2064x2752",
+				"source_capture": "iPad Pro 13-inch (M5) simulator"
+			},
+			"notes": null
+		},
+		{
+			"id": "ipad-12.9",
+			"family": "ipad",
+			"apple_label": "12.9\" display",
+			"devices": ["iPad Pro (2nd generation)"],
+			"accepted_sizes": [
+				{
+					"width": 2048,
+					"height": 2732,
+					"orientation": "portrait"
+				},
+				{
+					"width": 2732,
+					"height": 2048,
+					"orientation": "landscape"
+				}
+			],
+			"status": "optional",
+			"requirement_verbatim": null,
+			"scaling_fallback_verbatim": "If screenshots with the accepted sizes aren't provided, scaled screenshots for 13\" displays are used.",
+			"appshot_baseline_f9b9129": "missing",
+			"billington": {
+				"status": "scaled by ASC"
+			},
+			"notes": null
+		},
+		{
+			"id": "ipad-11",
+			"family": "ipad",
+			"apple_label": "11\" display",
+			"devices": [
+				"iPad Pro (M5, M4)",
+				"iPad Pro (4th generation, 3rd generation, 2nd generation, 1st generation)",
+				"iPad Air (M4, M3, M2)",
+				"iPad Air (5th generation, 4th generation)",
+				"iPad (A16)",
+				"iPad (10th generation)",
+				"iPad mini (A20 Pro, A17 Pro)",
+				"iPad mini (6th generation)"
+			],
+			"accepted_sizes": [
+				{
+					"width": 1488,
+					"height": 2266,
+					"orientation": "portrait"
+				},
+				{
+					"width": 2266,
+					"height": 1488,
+					"orientation": "landscape"
+				},
+				{
+					"width": 1512,
+					"height": 2316,
+					"orientation": "portrait"
+				},
+				{
+					"width": 2316,
+					"height": 1512,
+					"orientation": "landscape"
+				},
+				{
+					"width": 1668,
+					"height": 2420,
+					"orientation": "portrait"
+				},
+				{
+					"width": 2420,
+					"height": 1668,
+					"orientation": "landscape"
+				},
+				{
+					"width": 1668,
+					"height": 2388,
+					"orientation": "portrait"
+				},
+				{
+					"width": 2388,
+					"height": 1668,
+					"orientation": "landscape"
+				},
+				{
+					"width": 1640,
+					"height": 2360,
+					"orientation": "portrait"
+				},
+				{
+					"width": 2360,
+					"height": 1640,
+					"orientation": "landscape"
+				}
+			],
+			"status": "optional",
+			"requirement_verbatim": null,
+			"scaling_fallback_verbatim": "If screenshots with the accepted sizes aren't provided, scaled screenshots for 13\" displays are used.",
+			"appshot_baseline_f9b9129": "missing",
+			"billington": {
+				"status": "scaled by ASC"
+			},
+			"notes": null
+		},
+		{
+			"id": "ipad-10.5",
+			"family": "ipad",
+			"apple_label": "10.5\" display",
+			"devices": [
+				"iPad Pro",
+				"iPad Air (3rd generation)",
+				"iPad (9th generation, 8th generation, 7th generation)"
+			],
+			"accepted_sizes": [
+				{
+					"width": 1668,
+					"height": 2224,
+					"orientation": "portrait"
+				},
+				{
+					"width": 2224,
+					"height": 1668,
+					"orientation": "landscape"
+				}
+			],
+			"status": "optional",
+			"requirement_verbatim": null,
+			"scaling_fallback_verbatim": "If screenshots with the accepted sizes aren't provided, scaled screenshots for 12.9\" displays are used.",
+			"appshot_baseline_f9b9129": "missing",
+			"billington": {
+				"status": "scaled by ASC"
+			},
+			"notes": null
+		},
+		{
+			"id": "ipad-9.7",
+			"family": "ipad",
+			"apple_label": "9.7\" display",
+			"devices": [
+				"iPad Pro",
+				"iPad Air",
+				"iPad Air 2",
+				"iPad",
+				"iPad 2",
+				"iPad (6th generation, 5th generation, 4th generation, 3rd generation)",
+				"iPad mini (5th generation)",
+				"iPad mini 4",
+				"iPad mini 3",
+				"iPad mini 2"
+			],
+			"accepted_sizes": [
+				{
+					"width": 1536,
+					"height": 2008,
+					"orientation": "portrait",
+					"note": "portrait without status bar"
+				},
+				{
+					"width": 1536,
+					"height": 2048,
+					"orientation": "portrait",
+					"note": "portrait with status bar"
+				},
+				{
+					"width": 2048,
+					"height": 1496,
+					"orientation": "landscape",
+					"note": "landscape without status bar"
+				},
+				{
+					"width": 2048,
+					"height": 1536,
+					"orientation": "landscape",
+					"note": "landscape with status bar"
+				},
+				{
+					"width": 768,
+					"height": 1004,
+					"orientation": "portrait",
+					"note": "portrait without status bar"
+				},
+				{
+					"width": 768,
+					"height": 1024,
+					"orientation": "portrait",
+					"note": "portrait with status bar"
+				},
+				{
+					"width": 1024,
+					"height": 748,
+					"orientation": "landscape",
+					"note": "landscape without status bar"
+				},
+				{
+					"width": 1024,
+					"height": 768,
+					"orientation": "landscape",
+					"note": "landscape with status bar"
+				}
+			],
+			"status": "optional",
+			"requirement_verbatim": null,
+			"scaling_fallback_verbatim": "If screenshots with the accepted sizes aren't provided, scaled screenshots for 10.5\" displays are used.",
+			"appshot_baseline_f9b9129": "missing",
+			"billington": {
+				"status": "scaled by ASC"
+			},
+			"notes": null
+		}
+	]
+}

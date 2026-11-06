@@ -1,9 +1,26 @@
 import { DEVICES } from '../model/devices';
 import { assertDecodedImageMatches } from '../model/image';
+import { linenPlainText } from '../model/linen';
 import { getStyle, type StyleId } from '../model/studio';
 import type { Composition, ImageRef, Slide } from '../model/types';
-import { computePanoramaGeometry, type PhoneGeometry } from '../stitch/panorama';
+import {
+	classicCopyBand,
+	clearClassicCopy,
+	computePanoramaGeometry,
+	type PanoramaGeometry,
+	type PhoneGeometry
+} from '../stitch/panorama';
+import { drawCheckScene, measureCheckPanel } from './check';
+import { loadBundledFonts } from './fonts';
+import {
+	imageLayerError,
+	layerImages,
+	paintImageLayer,
+	rasterScale,
+	visibleCaptureHeight
+} from './frames';
 import { drawLinenScene, loadLinenFonts } from './linen';
+import type { CapturePlacement } from './preflight';
 
 type Context = CanvasRenderingContext2D;
 interface RenderOptions {
@@ -11,9 +28,9 @@ interface RenderOptions {
 }
 const imageCache = new Map<string, Promise<HTMLImageElement>>();
 const renderTokens = new WeakMap<HTMLCanvasElement, number>();
-let fontsReady: Promise<unknown> | undefined;
 const clamp = (value: number, min: number, max: number) =>
 	Math.max(min, Math.min(max, Number.isFinite(value) ? value : min));
+const loadFonts = loadBundledFonts;
 
 /**
  * Decode (or reuse) the bitmap, then confirm on EVERY call, cache hit or not, that its
@@ -51,18 +68,6 @@ function decodeImage(ref: ImageRef): Promise<HTMLImageElement> {
 		imageCache.delete(oldest);
 	}
 	return pending;
-}
-
-async function loadFonts() {
-	fontsReady ??= Promise.all([
-		document.fonts.load('400 100px "DM Sans"'),
-		document.fonts.load('600 100px "DM Sans"'),
-		document.fonts.load('700 100px "DM Sans"'),
-		document.fonts.load('800 100px "DM Sans"'),
-		document.fonts.load('400 100px "Instrument Serif"'),
-		document.fonts.load('italic 400 100px "Instrument Serif"')
-	]);
-	await fontsReady;
 }
 
 function rounded(
@@ -271,11 +276,7 @@ function background(
 }
 
 function family(style: StyleId): string {
-	return style === 'paper'
-		? '"Instrument Serif", Georgia, serif'
-		: style === 'terminal'
-			? '"SFMono-Regular", Menlo, monospace'
-			: '"DM Sans", Arial, sans-serif';
+	return style === 'paper' ? '"Instrument Serif", Georgia, serif' : '"DM Sans", Arial, sans-serif';
 }
 function wrappedLines(ctx: Context, text: string, maxWidth: number): string[] {
 	const lines: string[] = [];
@@ -325,6 +326,12 @@ function fitText(
 		ctx.font = font(size);
 		const lines = wrappedLines(ctx, content, maxWidth);
 		const lineHeight = size * lineSpacing;
+		// A word only breaks mid-letter once the type is as small as it can usefully go.
+		const wordFits = content.split(/\s+/).every((word) => ctx.measureText(word).width <= maxWidth);
+		if (!wordFits && size * 0.94 >= readableSize) {
+			size *= 0.94;
+			continue;
+		}
 		if (lines.length * lineHeight <= maxHeight) return { size, lines, lineHeight };
 		if (size * 0.94 < readableSize && !reflowed) {
 			// Preserve all entered words when many explicit newlines would otherwise
@@ -339,14 +346,7 @@ function fitText(
 	);
 }
 
-function text(
-	ctx: Context,
-	composition: Composition,
-	slide: Slide,
-	index: number,
-	width: number,
-	height: number
-) {
+function text(ctx: Context, composition: Composition, slide: Slide, width: number, height: number) {
 	const style = composition.style;
 	const palette = getStyle(style);
 	const color = slide.typography.fontColor || palette.foreground;
@@ -374,17 +374,7 @@ function text(
 		);
 		ctx.fillText(brand, margin + width * 0.035, width * 0.094, contentWidth * 0.7);
 	}
-	ctx.font = `500 ${width * 0.019}px "DM Sans", Arial, sans-serif`;
-	ctx.textAlign = 'right';
-	ctx.globalAlpha = 0.65;
-	ctx.fillText(
-		`${String(index + 1).padStart(2, '0')} / ${String(composition.slides.length).padStart(2, '0')}`,
-		width - margin,
-		width * 0.105
-	);
-	ctx.globalAlpha = 1;
-
-	const badgeY = below ? height * 0.666 : height * 0.099;
+	const { badgeY, titleY } = classicCopyBand(slide, width, height);
 	const badge = slide.badge?.trim();
 	if (badge) {
 		const label = style === 'terminal' ? `↗ ${badge.toUpperCase()}` : badge;
@@ -431,14 +421,14 @@ function text(
 
 	const desiredTitleSize = baselineSize * clamp(slide.fontScale ?? 1, 0.6, 1.6);
 	const weight = style === 'paper' ? 400 : slide.typography.fontWeight;
-	const titleY = badgeY + (badge ? width * 0.075 : 0);
 	const textX = centered ? width / 2 : margin;
 	const subtitleWidth = contentWidth * (centered ? 0.9 : 0.96);
 	const desiredSubtitleSize = width * (style === 'terminal' ? 0.028 : 0.033);
 	const subtitleFont = (size: number) => `400 ${size}px "DM Sans", Arial, sans-serif`;
 	const gap = width * 0.025;
 	const geometry =
-		computePanoramaGeometry(composition, index)?.phone ?? singlePhoneGeometry(slide, width, height);
+		computePanoramaGeometry(composition, composition.slides.indexOf(slide))?.phone ??
+		singlePhoneGeometry(slide, width, height);
 	const phoneTop =
 		geometry.centerY -
 		(Math.abs(Math.cos(geometry.rotation)) * geometry.height) / 2 -
@@ -447,18 +437,20 @@ function text(
 		? height - width * 0.16
 		: Math.max(titleY + height * 0.14, Math.min(height * 0.39, phoneTop - width * 0.035));
 	const availableHeight = textBottom - titleY;
+	// The stored text keeps its `*italic*` markers for Table Linen and The Check. A style without
+	// an italic accent shows the words, not the markup.
+	const headlineCopy = linenPlainText(slide.typography.headline);
+	const subtitleCopy = linenPlainText(slide.typography.subtitle ?? '');
 	ctx.font = subtitleFont(desiredSubtitleSize);
-	const subtitleReserve = slide.typography.subtitle
+	const subtitleReserve = subtitleCopy
 		? Math.min(
-				wrappedLines(ctx, slide.typography.subtitle, subtitleWidth).length *
-					desiredSubtitleSize *
-					1.35,
+				wrappedLines(ctx, subtitleCopy, subtitleWidth).length * desiredSubtitleSize * 1.35,
 				availableHeight * 0.38
 			) + gap
 		: 0;
 	const title = fitText(
 		ctx,
-		slide.typography.headline,
+		headlineCopy,
 		contentWidth,
 		availableHeight - subtitleReserve,
 		desiredTitleSize,
@@ -471,11 +463,11 @@ function text(
 	title.lines.forEach((line, lineIndex) =>
 		ctx.fillText(line, textX, titleY + lineIndex * title.lineHeight)
 	);
-	if (slide.typography.subtitle) {
+	if (subtitleCopy) {
 		const subtitleY = titleY + title.lines.length * title.lineHeight + gap;
 		const subtitle = fitText(
 			ctx,
-			slide.typography.subtitle,
+			subtitleCopy,
 			subtitleWidth,
 			textBottom - subtitleY,
 			desiredSubtitleSize,
@@ -489,14 +481,6 @@ function text(
 		);
 		ctx.globalAlpha = 1;
 	}
-
-	ctx.textAlign = 'left';
-	ctx.fillStyle = color;
-	ctx.globalAlpha = 0.6;
-	ctx.font = `500 ${width * 0.018}px ${style === 'terminal' ? family(style) : '"DM Sans", Arial, sans-serif'}`;
-	ctx.fillText(brand.toUpperCase(), margin, height - width * 0.095, contentWidth * 0.45);
-	ctx.textAlign = 'right';
-	ctx.fillText(`${String(index + 1).padStart(2, '0')}`, width - margin, height - width * 0.095);
 	ctx.restore();
 }
 
@@ -511,6 +495,8 @@ function phone(
 	const palette = getStyle(composition.style);
 	ctx.save();
 	ctx.translate(geometry.centerX, geometry.centerY);
+	// Shadows ignore the canvas transform, so preview size has to be applied by hand.
+	const raster = rasterScale(ctx);
 	ctx.rotate(geometry.rotation);
 	const pad = slide.frame === 'none' ? 0 : width * (slide.frame === 'clay' ? 0.035 : 0.022);
 	const radius = slide.frame === 'none' ? 0 : width * 0.135;
@@ -528,9 +514,9 @@ function phone(
 	}
 	if (slide.effects.shadow !== 'none') {
 		ctx.shadowColor = composition.style === 'midnight' ? '#00000088' : '#08122955';
-		ctx.shadowBlur = width * (slide.effects.shadow === 'dramatic' ? 0.1 : 0.05);
-		ctx.shadowOffsetX = width * 0.005;
-		ctx.shadowOffsetY = width * (slide.effects.shadow === 'dramatic' ? 0.058 : 0.026);
+		ctx.shadowBlur = width * (slide.effects.shadow === 'dramatic' ? 0.1 : 0.05) * raster;
+		ctx.shadowOffsetX = width * 0.005 * raster;
+		ctx.shadowOffsetY = width * (slide.effects.shadow === 'dramatic' ? 0.058 : 0.026) * raster;
 	}
 	const shell = ctx.createLinearGradient(x, y, -x, -y);
 	if (slide.frame === 'clay') {
@@ -628,13 +614,110 @@ function singlePhoneGeometry(slide: Slide, width: number, height: number): Phone
 		slide.primaryImage && slide.primaryImage.naturalWidth > 0
 			? slide.primaryImage.naturalHeight / slide.primaryImage.naturalWidth
 			: 2868 / 1320;
-	return {
-		centerX: width * 0.5,
-		centerY: height * (isBelow ? 0.295 : 0.733),
-		width: phoneWidth,
-		height: (phoneWidth - pad * 2) * ratio + pad * 2,
-		rotation: (clamp(slide.tilt ?? 0, -45, 45) * Math.PI) / 180
+	return clearClassicCopy(
+		{
+			centerX: width * 0.5,
+			centerY: height * (isBelow ? 0.295 : 0.733),
+			width: phoneWidth,
+			height: (phoneWidth - pad * 2) * ratio + pad * 2,
+			rotation: (clamp(slide.tilt ?? 0, -45, 45) * Math.PI) / 180
+		},
+		[slide],
+		width,
+		height
+	);
+}
+
+/** Report the painter's own capture geometry, per viewport, without painting a full-size image. */
+export async function capturePlacement(
+	composition: Composition,
+	slideIndex: number
+): Promise<CapturePlacement | null> {
+	if (composition.style === 'table-linen') return null; // Measured directly by the Linen preflight.
+	const slide = composition.slides[slideIndex];
+	if (!slide) throw new Error('This screenshot no longer exists.');
+	const { width, height } = DEVICES[composition.device];
+	const panorama = computePanoramaGeometry(composition, slideIndex);
+	const source = panorama ? composition.panorama!.image : slide.primaryImage;
+	if (!source) return null;
+	const viewport = {
+		left: panorama?.viewportX ?? 0,
+		right: (panorama?.viewportX ?? 0) + width,
+		top: 0,
+		bottom: height
 	};
+	if (composition.style === 'the-check') {
+		await loadFonts();
+		const canvas = document.createElement('canvas');
+		const ctx = canvas.getContext('2d');
+		if (!ctx) throw new Error('Your browser could not measure the screenshot layout.');
+		const panel = measureCheckPanel(ctx, composition, slideIndex, panorama);
+		if (!panel) return null;
+		return {
+			width: panel.width,
+			height: panel.height,
+			scale: panel.scale,
+			visibleHeight: visibleCaptureHeight(panel, viewport)
+		};
+	}
+	const geometry = panorama?.phone ?? singlePhoneGeometry(slide, width, height);
+	const treatment = panorama ? composition.slides[panorama.leftIndex] : slide;
+	const pad =
+		treatment.frame === 'none' ? 0 : geometry.width * (treatment.frame === 'clay' ? 0.035 : 0.022);
+	const capture = {
+		x: geometry.centerX - geometry.width / 2 + pad,
+		y: geometry.centerY - geometry.height / 2 + pad,
+		width: geometry.width - pad * 2,
+		height: geometry.height - pad * 2,
+		rotation: geometry.rotation
+	};
+	return {
+		width: capture.width,
+		height: capture.height,
+		scale: capture.width / source.naturalWidth,
+		visibleHeight: visibleCaptureHeight(capture, viewport)
+	};
+}
+
+/** The slides whose layers appear on this canvas, with each one's left edge in the buffer. */
+function slidesOnCanvas(
+	composition: Composition,
+	slideIndex: number,
+	panorama: PanoramaGeometry | null
+): { slide: Slide; offset: number }[] {
+	const { width } = DEVICES[composition.device];
+	return panorama
+		? [panorama.leftIndex, panorama.rightIndex].map((index, i) => ({
+				slide: composition.slides[index],
+				offset: i * width
+			}))
+		: [{ slide: composition.slides[slideIndex], offset: 0 }];
+}
+
+/** Layers go over everything, inside their own frame; a pair's seam never splits one. */
+function paintSlideLayers(
+	ctx: Context,
+	composition: Composition,
+	slideIndex: number,
+	panorama: PanoramaGeometry | null,
+	images: ReadonlyMap<string, HTMLImageElement>
+) {
+	const { width, height } = DEVICES[composition.device];
+	for (const { slide, offset } of slidesOnCanvas(composition, slideIndex, panorama)) {
+		if (!slide.layers?.length) continue;
+		ctx.save();
+		ctx.beginPath();
+		ctx.rect(offset, 0, width, height);
+		ctx.clip();
+		ctx.translate(offset, 0);
+		for (const layer of slide.layers) {
+			const error = imageLayerError(layer, { width, height });
+			if (error) throw new Error(error);
+			const image = images.get(layer.image.blobUrl);
+			if (image) paintImageLayer(ctx, layer, image, width);
+		}
+		ctx.restore();
+	}
 }
 
 async function drawScene(
@@ -650,9 +733,24 @@ async function drawScene(
 	if (wholePair && !panorama) throw new Error('Select a connected pair to render its panorama.');
 	await loadFonts();
 	const source = await loadImage(panorama ? composition.panorama!.image : slide.primaryImage);
+	// Everything a frame shows is decoded and size-checked before the first pixel is painted.
+	const refs = slidesOnCanvas(composition, slideIndex, panorama).flatMap((item) =>
+		layerImages(item.slide.layers)
+	);
+	const decoded = await Promise.all(refs.map((ref) => loadImage(ref)));
+	const images = new Map<string, HTMLImageElement>();
+	refs.forEach((ref, index) => {
+		const image = decoded[index];
+		if (image) images.set(ref.blobUrl, image);
+	});
+	if (composition.style === 'the-check') {
+		drawCheckScene(ctx, composition, slideIndex, panorama, source, images, rasterScale(ctx));
+		return;
+	}
 	if (composition.style === 'table-linen') {
 		await loadLinenFonts();
 		drawLinenScene(ctx, composition, slideIndex, panorama, source, wholePair);
+		paintSlideLayers(ctx, composition, slideIndex, panorama, images);
 		return;
 	}
 	if (panorama) {
@@ -664,15 +762,16 @@ async function drawScene(
 		for (const index of [panorama.leftIndex, panorama.rightIndex]) {
 			ctx.save();
 			ctx.translate(index === panorama.leftIndex ? 0 : width, 0);
-			text(ctx, composition, composition.slides[index], index, width, height);
+			text(ctx, composition, composition.slides[index], width, height);
 			ctx.restore();
 		}
 		ctx.restore();
 	} else {
 		background(ctx, composition, slide, width, height, false, slideIndex);
 		phone(ctx, composition, slide, singlePhoneGeometry(slide, width, height), source);
-		text(ctx, composition, slide, slideIndex, width, height);
+		text(ctx, composition, slide, width, height);
 	}
+	paintSlideLayers(ctx, composition, slideIndex, panorama, images);
 }
 
 async function render(
