@@ -46,6 +46,7 @@ const DB_VERSION = 1;
 const JOURNAL_PREFIX = 'appshot.journal.v1.';
 const TAB_CAMPAIGN_KEY = 'appshot.tab-campaign';
 const CHANNEL_NAME = 'appshot-campaigns';
+const DELETED_REVISION_PREFIX = 'deleted-revision:';
 /** Enough for a long session with coalesced edits. Steps share every unchanged part of a document. */
 export const CAMPAIGN_HISTORY_LIMIT = 100;
 
@@ -123,7 +124,7 @@ export function journalDisposition(
 	if (!record) return 'promote';
 	if (record.lastWriter.instance === entry.instance)
 		return record.lastWriter.seq >= entry.seq ? 'discard' : 'promote';
-	return record.revision <= entry.base ? 'promote' : 'fork';
+	return record.revision === entry.base ? 'promote' : 'fork';
 }
 
 /** Whether a page that last knew `base` may write this record without losing another page's work. */
@@ -202,6 +203,21 @@ function committed(transaction: IDBTransaction): Promise<void> {
 		transaction.onabort = transaction.onerror = () =>
 			reject(transaction.error ?? new Error('Browser storage failed.'));
 	});
+}
+
+/** A live tab can recreate a deleted campaign; its revision must still advance past stale history. */
+async function nextCampaignRevision(
+	transaction: IDBTransaction,
+	id: string,
+	record: CampaignRecord | undefined
+): Promise<number> {
+	if (record) return record.revision + 1;
+	const deleted: unknown = await requested(
+		transaction.objectStore('meta').get(`${DELETED_REVISION_PREFIX}${id}`)
+	);
+	return (
+		(typeof deleted === 'number' && Number.isSafeInteger(deleted) && deleted > 0 ? deleted : 0) + 1
+	);
 }
 
 function openDatabase(): Promise<IDBDatabase> {
@@ -464,7 +480,9 @@ export class CampaignPersistence implements ProjectPersistence<ProjectV2> {
 				throw new CampaignConflictError(slot, existing!.revision, existing!.updatedAt);
 			await this.#ensureBytes(transaction, document);
 			changed = !existing || !storedDocumentsEqual(existing.document, text);
-			revision = changed ? (existing?.revision ?? 0) + 1 : existing!.revision;
+			revision = changed
+				? await nextCampaignRevision(transaction, slot, existing)
+				: existing!.revision;
 			if (changed)
 				campaigns.put({
 					id: slot,
@@ -699,13 +717,17 @@ export class CampaignPersistence implements ProjectPersistence<ProjectV2> {
 			const campaigns = transaction.objectStore('campaigns');
 			const record: CampaignRecord | undefined = await requested(campaigns.get(header.campaign));
 			const disposition =
-				record && !isReadable(record.document) ? 'fork' : journalDisposition(header, record);
+				record && !isReadable(record.document)
+					? 'fork'
+					: record && storedDocumentsEqual(record.document, document)
+						? 'discard'
+						: journalDisposition(header, record);
 			const mark = { instance: header.instance, seq: header.seq };
 			if (disposition === 'promote') {
 				campaigns.put({
 					id: header.campaign,
 					schema: 2,
-					revision: (record?.revision ?? 0) + 1,
+					revision: await nextCampaignRevision(transaction, header.campaign, record),
 					updatedAt: header.at,
 					lastWriter: mark,
 					...summarize(document),
@@ -994,7 +1016,7 @@ export class CampaignPersistence implements ProjectPersistence<ProjectV2> {
 		const base = this.#bases.get(id);
 		if (
 			base !== undefined &&
-			record.revision > base &&
+			record.revision !== base &&
 			record.lastWriter.instance !== this.#instance
 		) {
 			if (!preserveHistory) throw new CampaignConflictError(id, record.revision, record.updatedAt);
@@ -1033,9 +1055,12 @@ export class CampaignPersistence implements ProjectPersistence<ProjectV2> {
 	 */
 	async discardRecoverable(id: string): Promise<void> {
 		const db = await this.#db();
-		const transaction = db.transaction(['campaigns', 'quarantine', 'assets'], 'readwrite');
+		const transaction = db.transaction(['campaigns', 'quarantine', 'assets', 'meta'], 'readwrite');
 		const finished = committed(transaction);
 		const campaigns = transaction.objectStore('campaigns');
+		const existing: CampaignRecord | undefined = await requested(campaigns.get(id));
+		if (existing)
+			transaction.objectStore('meta').put(existing.revision, `${DELETED_REVISION_PREFIX}${id}`);
 		campaigns.delete(id);
 		transaction.objectStore('quarantine').delete(id);
 		const records = await requested<CampaignRecord[]>(campaigns.getAll());

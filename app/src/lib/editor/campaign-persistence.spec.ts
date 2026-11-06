@@ -43,8 +43,8 @@ describe('what happens to a journal entry found at load', () => {
 		expect(journalDisposition(entry, stored)).toBe(expected);
 	});
 
-	it('promotes when the record somehow fell behind the entry', () => {
-		expect(journalDisposition(entry, record(1, 'other-tab', 1))).toBe('promote');
+	it('keeps a separate copy if another writer’s revision fell behind the entry', () => {
+		expect(journalDisposition(entry, record(1, 'other-tab', 1))).toBe('fork');
 	});
 });
 

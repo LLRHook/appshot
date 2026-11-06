@@ -86,6 +86,130 @@ const flush = (page: Page) =>
 		return window.studio.store.status;
 	});
 
+async function savedCampaign(page: Page, id: string) {
+	return (await page.evaluate(() => window.AppshotCampaignTests.readStored())).campaigns.find(
+		(row) => row.id === id
+	)!;
+}
+
+for (const baseRevision of [1, 3]) {
+	test(`SP-33: undo after delete and recreate preserves the other tab’s version (base ${baseRevision})`, async ({
+		context
+	}) => {
+		const writer = await openPage(context);
+		await start(writer);
+		const original = await writer.evaluate(async (revisions) => {
+			const { store, persistence } = window.studio;
+			const T = window.AppshotCampaignTests;
+			for (let revision = 1; revision <= revisions; revision++) {
+				store.apply(
+					T.editFirstHeadline(
+						{ ...store.project, name: 'Delete and recreate' },
+						`Original revision ${revision}`
+					)
+				);
+				await store.flush();
+			}
+			return {
+				id: persistence.campaignIdOf(store.project),
+				headline: store.project.slides[0].typography.headline
+			};
+		}, baseRevision);
+		const before = await savedCampaign(writer, original.id);
+		expect(before.revision).toBe(baseRevision);
+		const editor = await context.newPage();
+		await editor.goto('/');
+		await expect(editor.locator('.studio')).not.toHaveClass(/loading/);
+		await expect(editor.getByLabel('Headline', { exact: false })).toHaveValue(original.headline);
+		await editor.getByRole('button', { name: 'New campaign', exact: true }).click();
+		await expect(editor.locator('.save-status')).toHaveText('All changes saved');
+		await editor.getByRole('button', { name: /^Recent campaigns/ }).click();
+		const item = editor.locator('.saved-list article').filter({ hasText: 'Delete and recreate' });
+		await item
+			.getByRole('button', { name: 'Delete saved campaign Delete and recreate', exact: true })
+			.click();
+		await item.getByRole('button', { name: 'Delete permanently', exact: true }).click();
+		await expect(item).toHaveCount(0);
+		await editor.getByRole('button', { name: 'Close recent campaigns', exact: true }).click();
+		await edit(writer, 'Recreated by the live tab');
+		expect(await flush(writer)).toBe('saved');
+		const recreated = await savedCampaign(writer, original.id);
+		await writer.close();
+		await editor.getByRole('button', { name: /^Recent campaigns/ }).click();
+		await editor
+			.locator('.saved-list article')
+			.filter({ hasText: 'Delete and recreate' })
+			.getByRole('button', { name: 'Open', exact: true })
+			.click();
+		await expect(editor.locator('.recovery-dialog')).not.toBeVisible();
+		await expect(editor.getByLabel('Headline', { exact: false })).toHaveValue(
+			'Recreated by the live tab'
+		);
+		await expect(editor.locator('.save-status')).toHaveText('All changes saved');
+		await editor.getByRole('button', { name: 'Undo', exact: true }).click();
+		await editor.getByRole('button', { name: 'Undo', exact: true }).click();
+		await expect(editor.getByLabel('Headline', { exact: false })).toHaveValue(original.headline);
+		await expect(editor.locator('.save-status')).toHaveText('All changes saved');
+		const reader = await openPage(context);
+		const afterUndo = await savedCampaign(reader, original.id);
+		await record(`SP-33-base-${baseRevision}`, { before, recreated, afterUndo });
+		expect(afterUndo.document).toBe(recreated.document);
+		expect(afterUndo.revision).toBe(recreated.revision);
+		const copies = (await reader.evaluate(() => window.AppshotCampaignTests.readStored()))
+			.campaigns;
+		expect(
+			copies.some(
+				(row) =>
+					row.id !== original.id &&
+					JSON.parse(row.document).slides[0].typography.headline === original.headline
+			)
+		).toBe(true);
+		await editor.reload();
+		await expect(editor.locator('.studio')).not.toHaveClass(/loading/);
+		await expect(editor.getByLabel('Headline', { exact: false })).toHaveValue(original.headline);
+		expect((await savedCampaign(reader, original.id)).document).toBe(recreated.document);
+	});
+}
+
+test('SP-33: journal recovery after a delete advances the campaign revision', async ({
+	context
+}) => {
+	const first = await openPage(context);
+	await start(first);
+	await edit(first, 'Before deletion');
+	await flush(first);
+	const before = (await first.evaluate(() => window.AppshotCampaignTests.readStored()))
+		.campaigns[0];
+	const second = await openPage(context);
+	await start(second);
+	await second.evaluate(async (id) => {
+		const { store, persistence } = window.studio;
+		store.replaceProject(window.AppshotCampaignTests.createBlankProjectV2());
+		await store.flush();
+		await persistence.discardRecoverable(id);
+	}, before.id);
+	expect(await savedCampaign(second, before.id)).toBeUndefined();
+	expect(await edit(first, 'Pending when the deleted campaign was recreated')).toBe('saving');
+	await first.close();
+	const later = await openPage(context);
+	await start(later);
+	const recovered = await savedCampaign(later, before.id);
+	await record('SP-33-journal-recreation', { before, recovered });
+	expect(recovered.revision).toBeGreaterThan(before.revision);
+	expect(JSON.parse(recovered.document).slides[0].typography.headline).toBe(
+		'Pending when the deleted campaign was recreated'
+	);
+	const result = await second.evaluate(async (id) => {
+		try {
+			await window.studio.persistence.openRecoverable(id);
+			return 'opened without preserving history';
+		} catch (error) {
+			return (error as Error).name;
+		}
+	}, before.id);
+	expect(result).toBe('CampaignConflictError');
+});
+
 async function record(name: string, data: unknown) {
 	const directory = process.env.PLAYWRIGHT_ARTIFACT_DIR
 		? path.join(process.env.PLAYWRIGHT_ARTIFACT_DIR, 'campaign-persistence')
@@ -149,6 +273,51 @@ test.describe('a real reload inside the autosave delay', () => {
 		const after = await start(page);
 		expect(after.status).toBe('empty');
 		expect(after.headline).not.toBe('Lost');
+	});
+
+	test('SP-31: an interrupted read-only open preserves the other tab’s record and save base', async ({
+		context
+	}) => {
+		const first = await openPage(context);
+		await start(first);
+		await edit(first, 'The writer’s saved version');
+		await flush(first);
+		const before = (await first.evaluate(() => window.AppshotCampaignTests.readStored()))
+			.campaigns[0];
+		const second = await openPage(context);
+		await start(second);
+		await second.evaluate(async () => {
+			window.studio.store.replaceProject(window.AppshotCampaignTests.createBlankProjectV2());
+			await window.studio.store.flush();
+		});
+		const loaded = second.waitForEvent('domcontentloaded');
+		const pending = await second.evaluate(async (id) => {
+			const { store, persistence } = window.studio;
+			store.replaceProject(await persistence.openRecoverable(id));
+			const result = {
+				status: store.status,
+				journal: Object.keys(localStorage).filter((key) => key.startsWith('appshot.journal.v1.'))
+					.length
+			};
+			setTimeout(() => location.reload(), 0);
+			return result;
+		}, before.id);
+		expect(pending).toEqual({ status: 'saving', journal: 1 });
+		await loaded;
+		await second.waitForFunction(() => Boolean(window.AppshotCampaignTests));
+		expect(await start(second)).toMatchObject({ headline: 'The writer’s saved version' });
+		const after = (
+			await second.evaluate(() => window.AppshotCampaignTests.readStored())
+		).campaigns.find((row) => row.id === before.id);
+		await record('SP-31-interrupted-read-only-open', { before, after, pending });
+		expect(after).toEqual(before);
+		await edit(first, 'The writer can continue without a fork');
+		expect(await flush(first)).toBe('saved');
+		expect(
+			(await first.evaluate(() => window.AppshotCampaignTests.readStored())).campaigns.find(
+				(row) => row.id === before.id
+			)?.document
+		).toContain('The writer can continue without a fork');
 	});
 
 	test('keeps it when the tab closes outright, and in a tab opened later', async ({ context }) => {
