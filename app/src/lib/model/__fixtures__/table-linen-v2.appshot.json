@@ -1,0 +1,413 @@
+{
+	"version": 1,
+	"name": "Billington",
+	"device": "iphone-6.9",
+	"style": "table-linen",
+	"accent": "#D4A843",
+	"continuityMode": "paired",
+	"slides": [
+		{
+			"id": "shared-bill",
+			"device": "iphone-6.9",
+			"label": "Shared bill",
+			"background": {
+				"kind": "solid",
+				"colors": ["#2A736E"]
+			},
+			"frame": "bezel",
+			"layout": "text-above",
+			"typography": {
+				"headline": "Dinner for four.\n*One shared bill.*",
+				"subtitle": "One dinner bill.\nEach person pays their share.",
+				"fontColor": "#FBF6EF",
+				"fontWeight": 400
+			},
+			"effects": {
+				"shadow": "soft",
+				"glow": 0
+			},
+			"continuity": {
+				"inset": 0
+			},
+			"primaryImage": {
+				"id": "capture-8348adb1196f5db1",
+				"blobUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGPgEpEDAABoAD1UCKP3AAAAAElFTkSuQmCC",
+				"naturalWidth": 1320,
+				"naturalHeight": 2868
+			},
+			"linen": {
+				"colors": {
+					"canvas": "#2A736E",
+					"band": "#24645F",
+					"headline": "#FBF6EF",
+					"accent": "#D4A843",
+					"subtitle": "#CFE3E0",
+					"wordmark": "#FBF6EF",
+					"dot": "#D4A843",
+					"shell": "#292C2C",
+					"shellEdge": "#515A59",
+					"shadow": "#000000",
+					"shadowOpacity": 0.3
+				},
+				"layout": {
+					"margin": 96,
+					"wordmarkTop": 128,
+					"headlineTop": 248,
+					"headlineWidth": 1128,
+					"headlineSize": 118,
+					"headlineLeading": 120,
+					"headlineTracking": -1.77,
+					"subtitleTop": 528,
+					"subtitleWidth": 1000,
+					"subtitleSize": 44,
+					"subtitleLeading": 57,
+					"bandTop": 2040
+				},
+				"phone": {
+					"mode": "full",
+					"top": 760,
+					"bottom": 2740,
+					"maxWidth": 1038,
+					"centerX": 660,
+					"shell": 24,
+					"radius": 60,
+					"frameless": false,
+					"shadow": true,
+					"rotation": 0,
+					"hardware": "iphone-17-pro-max",
+					"dynamicIsland": "draw",
+					"hardwareButtons": true
+				},
+				"band": true
+			}
+		},
+		{
+			"id": "fair-shares",
+			"device": "iphone-6.9",
+			"label": "Fair shares",
+			"background": {
+				"kind": "solid",
+				"colors": ["#2A736E"]
+			},
+			"frame": "bezel",
+			"layout": "text-above",
+			"typography": {
+				"headline": "Four fair shares.\n*Exactly what’s owed.*",
+				"subtitle": "Each person’s share, based on\nwhat they actually had.",
+				"fontColor": "#FBF6EF",
+				"fontWeight": 400
+			},
+			"effects": {
+				"shadow": "soft",
+				"glow": 0
+			},
+			"continuity": {
+				"inset": 0
+			},
+			"primaryImage": {
+				"id": "capture-8348adb1196f5db1",
+				"blobUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGPgEpEDAABoAD1UCKP3AAAAAElFTkSuQmCC",
+				"naturalWidth": 1320,
+				"naturalHeight": 2868
+			},
+			"linen": {
+				"colors": {
+					"canvas": "#2A736E",
+					"band": "#24645F",
+					"headline": "#FBF6EF",
+					"accent": "#D4A843",
+					"subtitle": "#CFE3E0",
+					"wordmark": "#FBF6EF",
+					"dot": "#D4A843",
+					"shell": "#292C2C",
+					"shellEdge": "#515A59",
+					"shadow": "#000000",
+					"shadowOpacity": 0.3
+				},
+				"layout": {
+					"margin": 96,
+					"wordmarkTop": 128,
+					"headlineTop": 248,
+					"headlineWidth": 1128,
+					"headlineSize": 118,
+					"headlineLeading": 120,
+					"headlineTracking": -1.77,
+					"subtitleTop": 528,
+					"subtitleWidth": 1000,
+					"subtitleSize": 44,
+					"subtitleLeading": 57,
+					"bandTop": 2040
+				},
+				"phone": {
+					"mode": "full",
+					"top": 760,
+					"bottom": 2740,
+					"maxWidth": 1038,
+					"centerX": 660,
+					"shell": 24,
+					"radius": 60,
+					"frameless": false,
+					"shadow": true,
+					"rotation": 0,
+					"hardware": "iphone-17-pro-max",
+					"dynamicIsland": "draw",
+					"hardwareButtons": true
+				},
+				"band": true
+			}
+		},
+		{
+			"id": "person-detail",
+			"device": "iphone-6.9",
+			"label": "Leo's share",
+			"background": {
+				"kind": "solid",
+				"colors": ["#FBF6EF"]
+			},
+			"frame": "bezel",
+			"layout": "text-above",
+			"typography": {
+				"headline": "Leo’s share,\n*line by line.*",
+				"subtitle": "The sea bass, a quarter of the shared plates,\nand tip on just those.",
+				"fontColor": "#2C2C2C",
+				"fontWeight": 400
+			},
+			"effects": {
+				"shadow": "soft",
+				"glow": 0
+			},
+			"continuity": {
+				"inset": 0
+			},
+			"primaryImage": {
+				"id": "capture-948f8b4d66d1c8ab",
+				"blobUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGMQ0bABAADMAHm9FcOvAAAAAElFTkSuQmCC",
+				"naturalWidth": 1320,
+				"naturalHeight": 2868
+			},
+			"linen": {
+				"colors": {
+					"canvas": "#FBF6EF",
+					"band": "#F1E2D2",
+					"headline": "#2C2C2C",
+					"accent": "#2A736E",
+					"subtitle": "#4C5B6B",
+					"wordmark": "#2C2C2C",
+					"dot": "#D4A843",
+					"shell": "#292C2C",
+					"shellEdge": "#515A59",
+					"shadow": "#2A736E",
+					"shadowOpacity": 0.18
+				},
+				"layout": {
+					"margin": 96,
+					"wordmarkTop": 128,
+					"headlineTop": 248,
+					"headlineWidth": 1128,
+					"headlineSize": 118,
+					"headlineLeading": 120,
+					"headlineTracking": -1.77,
+					"subtitleTop": 528,
+					"subtitleWidth": 1000,
+					"subtitleSize": 44,
+					"subtitleLeading": 57,
+					"bandTop": 2040
+				},
+				"phone": {
+					"mode": "full",
+					"top": 760,
+					"bottom": 2740,
+					"maxWidth": 1038,
+					"centerX": 660,
+					"shell": 24,
+					"radius": 60,
+					"frameless": false,
+					"shadow": true,
+					"rotation": 0,
+					"hardware": "iphone-17-pro-max",
+					"dynamicIsland": "draw",
+					"hardwareButtons": true
+				},
+				"band": true
+			}
+		},
+		{
+			"id": "trip-summary",
+			"device": "iphone-6.9",
+			"label": "Trip total",
+			"background": {
+				"kind": "solid",
+				"colors": ["#FBF6EF"]
+			},
+			"frame": "bezel",
+			"layout": "text-above",
+			"typography": {
+				"headline": "One tab.\n*The whole weekend.*",
+				"subtitle": "Bring the weekend's bills together\nand see the totals in one place.",
+				"fontColor": "#2C2C2C",
+				"fontWeight": 400
+			},
+			"effects": {
+				"shadow": "soft",
+				"glow": 0
+			},
+			"continuity": {
+				"inset": 0
+			},
+			"primaryImage": {
+				"id": "capture-dcafb3c0fef0958e",
+				"blobUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOQs4kCAAEwALVkUZVDAAAAAElFTkSuQmCC",
+				"naturalWidth": 1320,
+				"naturalHeight": 2868
+			},
+			"linen": {
+				"colors": {
+					"canvas": "#FBF6EF",
+					"band": "#F1E2D2",
+					"headline": "#2C2C2C",
+					"accent": "#2A736E",
+					"subtitle": "#4C5B6B",
+					"wordmark": "#2C2C2C",
+					"dot": "#D4A843",
+					"shell": "#292C2C",
+					"shellEdge": "#515A59",
+					"shadow": "#2A736E",
+					"shadowOpacity": 0.18
+				},
+				"layout": {
+					"margin": 96,
+					"wordmarkTop": 128,
+					"headlineTop": 248,
+					"headlineWidth": 1128,
+					"headlineSize": 118,
+					"headlineLeading": 120,
+					"headlineTracking": -1.77,
+					"subtitleTop": 528,
+					"subtitleWidth": 1000,
+					"subtitleSize": 44,
+					"subtitleLeading": 57,
+					"bandTop": 2040
+				},
+				"phone": {
+					"mode": "full",
+					"top": 760,
+					"bottom": 2740,
+					"maxWidth": 1038,
+					"centerX": 660,
+					"shell": 24,
+					"radius": 60,
+					"frameless": false,
+					"shadow": true,
+					"rotation": 0,
+					"hardware": "iphone-17-pro-max",
+					"dynamicIsland": "draw",
+					"hardwareButtons": true
+				},
+				"band": true
+			}
+		},
+		{
+			"id": "settlement",
+			"device": "iphone-6.9",
+			"label": "Paid tracking",
+			"background": {
+				"kind": "solid",
+				"colors": ["#2A736E"]
+			},
+			"frame": "bezel",
+			"layout": "text-above",
+			"typography": {
+				"headline": "See every share.\n*Know who’s paid.*",
+				"subtitle": "Track paid and unpaid amounts\nwhen it’s time to settle up.",
+				"fontColor": "#FBF6EF",
+				"fontWeight": 400
+			},
+			"effects": {
+				"shadow": "soft",
+				"glow": 0
+			},
+			"continuity": {
+				"inset": 0
+			},
+			"primaryImage": {
+				"id": "capture-e5ac293446adbc14",
+				"blobUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGPQCKgAAAGUAPG6nb+jAAAAAElFTkSuQmCC",
+				"naturalWidth": 1320,
+				"naturalHeight": 2868
+			},
+			"linen": {
+				"colors": {
+					"canvas": "#2A736E",
+					"band": "#24645F",
+					"headline": "#FBF6EF",
+					"accent": "#D4A843",
+					"subtitle": "#CFE3E0",
+					"wordmark": "#FBF6EF",
+					"dot": "#D4A843",
+					"shell": "#292C2C",
+					"shellEdge": "#515A59",
+					"shadow": "#000000",
+					"shadowOpacity": 0.3
+				},
+				"layout": {
+					"margin": 96,
+					"wordmarkTop": 128,
+					"headlineTop": 248,
+					"headlineWidth": 1128,
+					"headlineSize": 118,
+					"headlineLeading": 120,
+					"headlineTracking": -1.77,
+					"subtitleTop": 528,
+					"subtitleWidth": 1000,
+					"subtitleSize": 44,
+					"subtitleLeading": 57,
+					"bandTop": 2040
+				},
+				"phone": {
+					"mode": "full",
+					"top": 760,
+					"bottom": 2740,
+					"maxWidth": 1038,
+					"centerX": 660,
+					"shell": 24,
+					"radius": 60,
+					"frameless": false,
+					"shadow": true,
+					"rotation": 0,
+					"hardware": "iphone-17-pro-max",
+					"dynamicIsland": "draw",
+					"hardwareButtons": true
+				},
+				"band": true
+			}
+		}
+	],
+	"panorama": {
+		"leftId": "shared-bill",
+		"rightId": "fair-shares",
+		"image": {
+			"id": "capture-8348adb1196f5db1",
+			"blobUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGPgEpEDAABoAD1UCKP3AAAAAElFTkSuQmCC",
+			"naturalWidth": 1320,
+			"naturalHeight": 2868
+		},
+		"offset": 0,
+		"scale": 1,
+		"tilt": 0,
+		"linenPhone": {
+			"mode": "full",
+			"top": 751,
+			"bottom": 2803,
+			"maxWidth": 944,
+			"centerX": 1152,
+			"shell": 24,
+			"radius": 60,
+			"frameless": false,
+			"shadow": true,
+			"rotation": -4.8,
+			"hardware": "iphone-17-pro-max",
+			"dynamicIsland": "draw",
+			"hardwareButtons": true
+		}
+	}
+}

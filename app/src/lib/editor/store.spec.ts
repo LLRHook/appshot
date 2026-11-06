@@ -579,6 +579,210 @@ describe('dispose', () => {
 	});
 });
 
+describe('journal', () => {
+	function journaling() {
+		const journal: Doc[] = [];
+		const { persistence, writes } = memoryPersistence();
+		const { store } = makeStore({
+			persistence: {
+				...persistence,
+				journal: (document) => {
+					journal.push(document);
+				}
+			}
+		});
+		return { store, journal, writes };
+	}
+
+	it('records every committed edit synchronously, before the autosave delay', () => {
+		const { store, journal, writes } = journaling();
+		store.apply(doc('one'));
+		expect(journal.map((d) => d.title)).toEqual(['one']);
+		store.apply(doc('two'), { coalesce: 'k' });
+		store.apply(doc('three'), { coalesce: 'k' });
+		expect(journal.map((d) => d.title)).toEqual(['one', 'two', 'three']);
+		expect(writes).toEqual([]);
+	});
+
+	it('records undo and redo, which change what a reload should show', () => {
+		const { store, journal } = journaling();
+		store.apply(doc('one'));
+		store.undo();
+		store.redo();
+		expect(journal.map((d) => d.title)).toEqual(['one', 'start', 'one']);
+	});
+
+	it('records the repaired document, and nothing for a no-op or a rejected edit', () => {
+		const journal: Doc[] = [];
+		const { persistence } = memoryPersistence();
+		const { store } = makeStore({
+			normalize: (next) => ({ ...next, slides: next.slides.filter(Boolean) }),
+			persistence: {
+				...persistence,
+				journal: (document) => {
+					journal.push(document);
+				},
+				rejectReason: (document) => (document.title === 'huge' ? 'Too large.' : null)
+			}
+		});
+		store.apply({ ...doc('start') });
+		store.apply(doc('huge'));
+		store.select(1);
+		store.checkpoint();
+		expect(journal).toEqual([]);
+		store.apply(doc('one', ['a', '']));
+		expect(journal[0].slides).toEqual(['a']);
+	});
+
+	it('does not count a journaled edit as saved until its write finishes', async () => {
+		const { persistence, calls } = manualSave();
+		const { store } = makeStore({ persistence: { ...persistence, journal: () => {} } });
+		store.apply(doc('one'));
+		expect(store.status).toBe('saving');
+		await vi.advanceTimersByTimeAsync(AUTOSAVE_MS);
+		expect(store.status).toBe('saving');
+		calls[0].resolve();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(store.status).toBe('saved');
+	});
+
+	it('keeps editing when the journal throws', async () => {
+		const { persistence, writes } = memoryPersistence();
+		const { store } = makeStore({
+			persistence: {
+				...persistence,
+				journal: () => {
+					throw new Error('quota');
+				}
+			}
+		});
+		expect(store.apply(doc('one')).status).toBe('applied');
+		await vi.advanceTimersByTimeAsync(AUTOSAVE_MS);
+		expect(writes.map((d) => d.title)).toEqual(['one']);
+	});
+
+	it('does not journal a restored document', async () => {
+		const journal: Doc[] = [];
+		const { persistence } = memoryPersistence(doc('saved'));
+		const { store } = makeStore({
+			persistence: {
+				...persistence,
+				journal: (document) => {
+					journal.push(document);
+				}
+			}
+		});
+		await store.restore();
+		expect(journal).toEqual([]);
+	});
+});
+
+describe('replacing a campaign', () => {
+	it('writes the outgoing campaign’s pending edit before the incoming one', async () => {
+		const { store, writes } = makeStore();
+		store.apply(doc('last edit of old'));
+		store.replaceProject(doc('new campaign'));
+		await vi.advanceTimersByTimeAsync(AUTOSAVE_MS);
+		expect(writes.map((d) => d.title)).toEqual(['last edit of old', 'new campaign']);
+		expect(store.status).toBe('saved');
+	});
+
+	it('writes nothing extra when the outgoing campaign has no pending edit', async () => {
+		const { store, writes } = makeStore();
+		store.replaceProject(doc('new campaign'));
+		await vi.advanceTimersByTimeAsync(AUTOSAVE_MS);
+		expect(writes.map((d) => d.title)).toEqual(['new campaign']);
+	});
+
+	it('lets persistence give the incoming document its own slot, and keeps it undoable', async () => {
+		const { persistence, writes } = memoryPersistence();
+		const { store } = makeStore({
+			persistence: {
+				...persistence,
+				forReplacement: (next) => ({ ...next, note: 'own slot' })
+			}
+		});
+		const original = store.project;
+		store.replaceProject(doc('new campaign'));
+		expect(store.project.note).toBe('own slot');
+		await vi.advanceTimersByTimeAsync(AUTOSAVE_MS);
+		expect(writes[0].note).toBe('own slot');
+		store.undo();
+		expect(store.project).toBe(original);
+	});
+
+	it('still writes the outgoing edit when the replacement is rejected', async () => {
+		const { persistence, writes } = memoryPersistence();
+		const { store } = makeStore({
+			persistence: {
+				...persistence,
+				rejectReason: (document) => (document.title === 'huge' ? 'Too large.' : null)
+			}
+		});
+		store.apply(doc('kept'));
+		expect(store.replaceProject(doc('huge')).status).toBe('rejected');
+		await vi.advanceTimersByTimeAsync(AUTOSAVE_MS);
+		expect(writes.map((d) => d.title)).toEqual(['kept']);
+		expect(store.project.title).toBe('kept');
+	});
+});
+
+describe('saveNow', () => {
+	it('writes the current document with nothing pending, and reports the result', async () => {
+		const { store, writes } = makeStore();
+		await store.saveNow();
+		expect(writes.map((d) => d.title)).toEqual(['start']);
+		expect(store.status).toBe('saved');
+	});
+
+	it('retries after a failure and replaces a pending timer instead of writing twice', async () => {
+		let fail = true;
+		const writes: Doc[] = [];
+		const onSaveFailed = vi.fn();
+		const { store } = makeStore({
+			onSaveFailed,
+			persistence: {
+				load: async () => null,
+				save: async (document) => {
+					if (fail) throw new Error('conflict');
+					writes.push(document);
+				}
+			}
+		});
+		store.apply(doc('one'));
+		await store.flush();
+		expect(store.status).toBe('failed');
+		expect(onSaveFailed).toHaveBeenCalledOnce();
+		fail = false;
+		store.apply(doc('two'));
+		await store.saveNow();
+		expect(store.status).toBe('saved');
+		await vi.advanceTimersByTimeAsync(AUTOSAVE_MS * 2);
+		expect(writes.map((d) => d.title)).toEqual(['two']);
+	});
+});
+
+describe('history after the asset split', () => {
+	it('keeps every unchanged part of a large document shared across many steps', () => {
+		const assets = { a: { url: 'blob:shared' } };
+		const initial = { slides: ['a'], title: 'start', assets };
+		const store = new EditorStore<typeof initial>({
+			initial,
+			historyLimit: 100,
+			persistence: { load: async () => null, save: async () => {} }
+		});
+		for (let step = 0; step < 150; step++) {
+			store.apply({ ...store.project, title: `step ${step}` });
+			expect(store.project.assets).toBe(assets);
+		}
+		let undos = 0;
+		while (store.undo()) undos++;
+		expect(undos).toBe(100);
+		expect(store.project.assets).toBe(assets);
+		expect(store.project.title).toBe('step 49');
+	});
+});
+
 describe('document boundary', () => {
 	it('holds a stored Project v2 through the same commands and persistence seam', async () => {
 		const project: ProjectV2 = {

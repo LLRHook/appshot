@@ -30,7 +30,7 @@
 <input
 	class="hidden-input"
 	type="file"
-	accept=".json"
+	accept=".json,.zip,application/json,application/zip"
 	bind:this={studio.projectInput}
 	onchange={(event) => {
 		void studio.openProject(event.currentTarget.files);

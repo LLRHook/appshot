@@ -22,7 +22,7 @@
 	>
 	<div class="breadcrumb">
 		<Icon name="folder" size={15} /><span>Workspace</span><span class="slash">/</span><strong
-			>{studio.composition.name}</strong
+			>{studio.store.project.name}</strong
 		>
 	</div>
 	<div class="top-actions">

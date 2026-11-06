@@ -16,6 +16,18 @@ export interface ProjectPersistence<D> {
 	 * edit, so an implementation must stay cheap for typing.
 	 */
 	rejectReason?(document: D): string | null;
+	/**
+	 * Record a committed edit synchronously, before autosave's delay elapses, so a reload or crash
+	 * right after it cannot lose it. Runs on every real edit and must stay cheap. Failure is not an
+	 * error: the edit still reaches `save`. A journaled edit is not yet durable, so the store keeps
+	 * reporting `saving` until `save` finishes.
+	 */
+	journal?(document: D): void;
+	/**
+	 * A whole different campaign is replacing the current one. Returns the document to commit, so
+	 * an implementation can give it its own slot and leave the replaced campaign intact.
+	 */
+	forReplacement?(next: D): D;
 }
 
 /** The current single-slot, inline-image autosave: one v1 Composition in IndexedDB. */

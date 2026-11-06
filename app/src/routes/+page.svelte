@@ -1,16 +1,21 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import ExportDialog from '$lib/components/studio/ExportDialog.svelte';
 	import FileInputs from '$lib/components/studio/FileInputs.svelte';
 	import Inspector from '$lib/components/studio/Inspector.svelte';
 	import Library from '$lib/components/studio/Library.svelte';
 	import Notices from '$lib/components/studio/Notices.svelte';
+	import RecoveryDialog from '$lib/components/studio/RecoveryDialog.svelte';
 	import Storyboard from '$lib/components/studio/Storyboard.svelte';
 	import TopBar from '$lib/components/studio/TopBar.svelte';
 	import { StudioController, setStudio } from '$lib/editor/studio.svelte';
 
 	const studio = setStudio(new StudioController());
 	onMount(() => studio.start());
+	$effect(() => {
+		const project = studio.store.project;
+		if (studio.store.ready) untrack(() => void studio.updateReadiness(project));
+	});
 	const inactive = $derived(!studio.store.ready || studio.processing);
 </script>
 
@@ -40,3 +45,4 @@
 </div>
 <Notices />
 <ExportDialog />
+<RecoveryDialog />

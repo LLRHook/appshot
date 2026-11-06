@@ -121,6 +121,15 @@
 			<p class="local-note"><Icon name="check" size={13} />Your images stay on this device.</p>
 		{/if}
 	</div>
+	<button
+		class="recent-campaigns"
+		onclick={() => {
+			studio.recoveryOpen = true;
+			void studio.refreshRecovery();
+		}}
+		><Icon name="folder" size={15} />Recent campaigns<span>{studio.recoverable.length || ''}</span
+		></button
+	>
 	<div class="library-footer">
 		<button onclick={() => studio.pick('project')}
 			><Icon name="folder" size={16} />Open project</button
@@ -128,3 +137,24 @@
 		>
 	</div>
 </aside>
+
+<style>
+	.recent-campaigns {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 14px 20px;
+		border: 0;
+		border-top: 1px solid #e7e9e1;
+		background: transparent;
+		color: #62734e;
+		font: inherit;
+		font-size: 11px;
+		text-align: left;
+		cursor: pointer;
+	}
+	.recent-campaigns span {
+		margin-left: auto;
+		color: #8a927f;
+	}
+</style>

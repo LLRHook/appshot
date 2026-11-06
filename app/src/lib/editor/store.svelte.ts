@@ -125,9 +125,18 @@ export class EditorStore<D extends EditorDocument> {
 		return { status: 'applied' };
 	}
 
-	/** Swap in a whole different campaign as one undoable step, selecting its first frame. */
+	/**
+	 * Swap in a whole different campaign as one undoable step, selecting its first frame. Any pending
+	 * write of the outgoing campaign goes first, so replacing it cannot drop its last edits.
+	 */
 	replaceProject(next: D): ApplyResult {
-		return this.apply(next, { select: 0 });
+		const incoming = this.#persistence.forReplacement?.(next) ?? next;
+		if (this.#saveTimer !== undefined) {
+			clearTimeout(this.#saveTimer);
+			this.#saveTimer = undefined;
+			this.#write();
+		}
+		return this.apply(incoming, { select: 0 });
 	}
 
 	/** Change the edited frame. Selection alone is not an undo step, but it ends the open one. */
@@ -194,6 +203,19 @@ export class EditorStore<D extends EditorDocument> {
 		return this.#saves;
 	}
 
+	/**
+	 * Write the current document now, even with nothing pending. For retrying after a failure the
+	 * user resolved, such as keeping a conflicting edit as a copy. Resolves like `flush`.
+	 */
+	saveNow(): Promise<void> {
+		clearTimeout(this.#saveTimer);
+		this.#saveTimer = undefined;
+		this.#revision++;
+		this.#status = 'saving';
+		this.#write();
+		return this.#saves;
+	}
+
 	/** Teardown: a pending change is written, not dropped, and an unfinished restore is ignored. */
 	dispose(): Promise<void> {
 		this.#disposed = true;
@@ -217,6 +239,11 @@ export class EditorStore<D extends EditorDocument> {
 	#scheduleSave(): void {
 		this.#revision++;
 		this.#status = 'saving';
+		try {
+			this.#persistence.journal?.(this.#project);
+		} catch {
+			// Best effort by contract: the edit still reaches the autosave write below.
+		}
 		clearTimeout(this.#saveTimer);
 		this.#saveTimer = setTimeout(() => {
 			this.#saveTimer = undefined;

@@ -1,5 +1,6 @@
 import type { StyleId } from './studio';
 import type { DeviceId } from './devices';
+import type { CheckSettings } from './check';
 import type { ImageLayer } from './contracts';
 import type { LinenPhone, LinenSettings } from './linen';
 
@@ -62,10 +63,9 @@ export interface Slide {
 	continuity: SlideContinuity;
 	/** Resolved Table Linen settings; ignored by the five original styles. */
 	linen?: LinenSettings;
-	/**
-	 * Reserved for projection: this target's resolved image layers. Nothing paints them yet, and
-	 * `parseProject` drops them until the model owner adds them.
-	 */
+	/** The Check settings; ignored by every other style. */
+	check?: CheckSettings;
+	/** This target's resolved image layers, painted over the scene in order. */
 	layers?: ImageLayer[];
 }
 

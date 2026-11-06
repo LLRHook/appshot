@@ -1,6 +1,26 @@
 import { createContext } from 'svelte';
 import { DEVICES, type DeviceId } from '$lib/model/devices';
-import { MAX_PROJECT_BYTES } from '$lib/model/limits';
+import { imageRefForAsset } from '$lib/model/assets';
+import { sourceCompatibility } from '$lib/model/capture';
+import {
+	applyCheckPatch,
+	applyCheckStyle,
+	resolveCheckSettings,
+	type CheckSettingsPatch
+} from '$lib/model/check';
+import type { ImageLayer, Issue, ProjectV2 } from '$lib/model/contracts';
+import { MAX_ART_SCALE, MAX_SLIDE_LAYERS } from '$lib/model/limits';
+import {
+	addAssets,
+	addTarget,
+	applyProjectedEdit,
+	bindPanoramaSource,
+	duplicateSlide,
+	removeTarget,
+	setAppName,
+	setWorkingTitle
+} from '$lib/model/edits';
+import { createBlankProjectV2, createDemoProjectV2 } from '$lib/model/migrate';
 import {
 	LINEN_LAYOUT_BOUNDS,
 	LINEN_PALETTES,
@@ -19,11 +39,25 @@ import {
 	type LinenSettings,
 	type LinenTheme
 } from '$lib/model/linen';
-import { clearBrokenPanorama, download, parseProject, readImage } from '$lib/model/project';
-import { createBlank, createDemo, createSlide, getStyle, type StyleId } from '$lib/model/studio';
+import { download } from '$lib/model/project';
+import { createSlide, getStyle, type StyleId } from '$lib/model/studio';
+import {
+	activeTargets,
+	normalizeProjectV2,
+	projectForTarget,
+	sourceIssues
+} from '$lib/model/targets';
 import type { Composition, ImageRef, Slide } from '$lib/model/types';
-import { portableComposition } from '$lib/render';
-import { legacyPersistence, type ProjectPersistence } from './persistence';
+import { createPreflight } from '$lib/render/preflight';
+import { projectTextFromFile, safeFilename } from '$lib/render/export';
+import {
+	CampaignConflictError,
+	CampaignPersistence,
+	CAMPAIGN_HISTORY_LIMIT,
+	type ExternalChange,
+	type RecoverableItem
+} from './campaign-persistence';
+import { type ProjectPersistence } from './persistence';
 import { EditorStore, type ApplyOptions } from './store.svelte';
 
 export type LibraryTab = 'styles' | 'assets';
@@ -32,6 +66,7 @@ export type FilePicker = 'upload' | 'replace' | 'project';
 /** The renderer paints a connected pair's phone with the LEFT frame's hardware palette. */
 const HARDWARE_COLOR_KEYS: readonly LinenColorKey[] = ['shell', 'shellEdge', 'shadow'];
 const MAX_FRAMES = 10;
+const quickPreflight = createPreflight();
 /** Inputs where ⌘Z stays the browser's own text undo. Every other control uses editor undo. */
 const NON_TEXT_INPUT_TYPES: ReadonlySet<string> = new Set([
 	'button',
@@ -66,7 +101,17 @@ export function isTextEntry(target: EventTarget | null): boolean {
  * `projectForTarget(store.project, activeTarget)` and these commands write through to the project.
  */
 export class StudioController {
-	readonly store: EditorStore<Composition>;
+	readonly store: EditorStore<ProjectV2>;
+	readonly campaigns: CampaignPersistence | undefined;
+	activeTarget = $state<DeviceId>('iphone-6.9');
+	conflict = $state.raw<ExternalChange | null>(null);
+	recoverable = $state.raw<RecoverableItem[]>([]);
+	recoveryOpen = $state(false);
+	inspectorTab = $state<'content' | 'device'>('content');
+	checkingReadiness = $state(false);
+	#readiness = $state.raw<{ project: ProjectV2; issues: Issue[] } | undefined>();
+	#readinessRevision = 0;
+	readonly #projections = new WeakMap<ProjectV2, Map<DeviceId, Composition>>();
 
 	activeTab = $state<LibraryTab>('styles');
 	toast = $state('');
@@ -76,9 +121,50 @@ export class StudioController {
 	replaceInput = $state.raw<HTMLInputElement>();
 	projectInput = $state.raw<HTMLInputElement>();
 	exportDialog = $state.raw<HTMLDialogElement>();
+	exportRevision = $state(0);
 	#toastTimer: ReturnType<typeof setTimeout> | undefined;
 
-	readonly composition = $derived.by((): Composition => this.store.project);
+	readonly targetId = $derived.by(() =>
+		this.store.project.targets.includes(this.activeTarget)
+			? this.activeTarget
+			: this.store.project.targets[0]
+	);
+	readonly composition = $derived.by((): Composition => {
+		const project = this.store.project;
+		let targets = this.#projections.get(project);
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- A projection cache is not UI state; derived computations cannot write reactive collections.
+		if (!targets) this.#projections.set(project, (targets = new Map()));
+		let composition = targets.get(this.targetId);
+		if (!composition) {
+			composition = projectForTarget(project, this.targetId);
+			targets.set(this.targetId, composition);
+		}
+		return composition;
+	});
+	readonly targets = $derived.by(() => activeTargets(this.store.project));
+	readonly issues = $derived.by(() =>
+		this.#readiness?.project === this.store.project
+			? this.#readiness.issues
+			: sourceIssues(this.store.project)
+	);
+	readonly sourceCounts = $derived.by((): Partial<Record<DeviceId, number>> => {
+		const project = this.store.project;
+		return Object.fromEntries(
+			project.targets.map((target) => [
+				target,
+				project.slides.filter((slide) => {
+					const pair =
+						project.continuityMode === 'paired' &&
+						project.panorama &&
+						(project.panorama.leftId === slide.id || project.panorama.rightId === slide.id);
+					return !!(
+						(pair && project.panorama?.variants?.[target]?.source) ||
+						slide.variants?.[target]?.source
+					);
+				}).length
+			])
+		);
+	});
 	readonly selected = $derived.by((): number => this.store.selectedIndex);
 	readonly slide = $derived(this.composition.slides[this.selected] ?? this.composition.slides[0]);
 	readonly direction = $derived(getStyle(this.composition.style));
@@ -88,15 +174,17 @@ export class StudioController {
 			(this.composition.panorama?.leftId === this.slide.id ||
 				this.composition.panorama?.rightId === this.slide.id)
 	);
-	readonly assets = $derived(
-		this.composition.slides
-			.flatMap((s) => (s.primaryImage ? [s.primaryImage] : []))
-			.filter((image, index, images) => images.findIndex((i) => i.id === image.id) === index)
+	readonly assets = $derived.by(() =>
+		Object.values(this.store.project.assets)
+			.filter((asset) => !asset.url.startsWith('/brand/'))
+			.map(imageRefForAsset)
 	);
 	readonly displayedImage = $derived(
 		this.isLinked ? this.composition.panorama?.image : this.slide.primaryImage
 	);
 	readonly isLinen = $derived(this.composition.style === 'table-linen');
+	readonly isCheck = $derived(this.composition.style === 'the-check');
+	readonly check = $derived(resolveCheckSettings(this.composition, this.selected));
 	readonly linen = $derived(resolveLinenSettings(this.composition, this.selected));
 	readonly linenPhone = $derived(
 		this.isLinked ? resolveSharedLinenPhone(this.composition) : this.linen.phone
@@ -122,36 +210,49 @@ export class StudioController {
 					(s.id === this.composition.panorama.leftId || s.id === this.composition.panorama.rightId))
 		)
 	);
-	readonly filename = $derived(
-		this.composition.name
-			.trim()
-			.replace(/[^a-z0-9-]+/gi, '-')
-			.toLowerCase() || 'appshot'
-	);
+	readonly filename = $derived.by(() => safeFilename(this.store.project.name));
 
-	constructor(persistence: ProjectPersistence<Composition> = legacyPersistence) {
-		this.store = new EditorStore<Composition>({
-			initial: createDemo(),
+	constructor(persistence: ProjectPersistence<ProjectV2> = new CampaignPersistence()) {
+		this.campaigns = persistence instanceof CampaignPersistence ? persistence : undefined;
+		this.store = new EditorStore<ProjectV2>({
+			initial: createDemoProjectV2(),
 			persistence,
-			normalize: clearBrokenPanorama,
-			onSaveFailed: () =>
-				this.notify(
-					'Browser storage is full or unavailable. Save your project to keep your changes.'
-				)
+			normalize: normalizeProjectV2,
+			historyLimit: CAMPAIGN_HISTORY_LIMIT,
+			onSaveFailed: (error) => {
+				if (error instanceof CampaignConflictError) {
+					this.conflict = {
+						campaignId: error.campaignId,
+						revision: error.storedRevision,
+						title: this.store.project.name
+					};
+				} else
+					this.notify(
+						'Browser storage is full or unavailable. Save your project to keep your changes.'
+					);
+			}
 		});
 	}
 
 	/** Restore the saved campaign. Returns the teardown for `onMount`. */
 	start(): () => void {
+		const unsubscribe = this.campaigns?.onExternalChange((change) => {
+			if (!this.store.project.campaignId || change.campaignId === this.store.project.campaignId)
+				this.conflict = change;
+		});
 		void this.store.restore().then((result) => {
 			if (result.status === 'failed')
 				this.notify(
 					'Your browser could not restore a saved project. You can still export and save a project file.'
 				);
+			const notes = this.campaigns?.takeRestoreNotes();
+			if (notes?.length) this.notify(notes.join(' '));
+			void this.refreshRecovery();
 		});
 		return () => {
 			clearTimeout(this.#toastTimer);
-			void this.store.dispose();
+			unsubscribe?.();
+			void this.store.dispose().finally(() => this.campaigns?.close());
 		};
 	}
 
@@ -172,6 +273,7 @@ export class StudioController {
 
 	openExport() {
 		this.error = '';
+		this.exportRevision++;
 		this.exportDialog?.showModal();
 	}
 
@@ -186,12 +288,24 @@ export class StudioController {
 	}
 
 	#commit(next: Composition, options?: ApplyOptions): boolean {
+		try {
+			return this.#commitProject(
+				applyProjectedEdit(this.store.project, this.targetId, next),
+				options
+			);
+		} catch (error) {
+			this.error = error instanceof Error ? error.message : 'Could not update the campaign.';
+			return false;
+		}
+	}
+
+	#commitProject(next: ProjectV2, options?: ApplyOptions): boolean {
 		const result = this.store.apply(next, options);
 		if (result.status === 'rejected') this.error = result.reason;
 		return result.status !== 'rejected';
 	}
 
-	#replace(next: Composition): boolean {
+	#replace(next: ProjectV2): boolean {
 		const result = this.store.replaceProject(next);
 		if (result.status === 'rejected') this.error = result.reason;
 		return result.status !== 'rejected';
@@ -224,7 +338,16 @@ export class StudioController {
 	}
 
 	setName(name: string) {
-		this.#commit({ ...this.composition, name: name || 'Untitled campaign' });
+		this.#commitProject(setWorkingTitle(this.store.project, name || 'Untitled campaign'));
+	}
+
+	setAppName(name: string) {
+		this.#commitProject(setAppName(this.store.project, name));
+	}
+
+	patchCheck(patch: CheckSettingsPatch, coalesce?: string) {
+		const check = applyCheckPatch(this.check, patch);
+		if (check) this.patchSlide({ check }, coalesce);
 	}
 
 	setAccent(accent: string) {
@@ -345,6 +468,10 @@ export class StudioController {
 	chooseStyle(id: StyleId) {
 		const project = this.composition;
 		const style = getStyle(id);
+		if (id === 'the-check') {
+			this.#commit(applyCheckStyle(project));
+			return;
+		}
 		if (id === 'table-linen') {
 			// Keep every raw screenshot and all copy. Slides that never had Table Linen
 			// settings get teal/cream defaults; earlier Table Linen edits are preserved.
@@ -394,11 +521,80 @@ export class StudioController {
 	}
 
 	chooseDevice(id: DeviceId) {
-		this.#commit({
-			...this.composition,
-			device: id,
-			slides: this.composition.slides.map((s) => ({ ...s, device: id }))
-		});
+		if (
+			!this.store.project.targets.includes(id) &&
+			!this.#commitProject(addTarget(this.store.project, id))
+		)
+			return;
+		this.store.checkpoint();
+		this.activeTarget = id;
+	}
+
+	removeOutput(id: DeviceId) {
+		try {
+			this.#commitProject(removeTarget(this.store.project, id));
+		} catch (error) {
+			this.error = error instanceof Error ? error.message : 'Could not remove this output.';
+		}
+	}
+
+	focusIssue(issue: Issue) {
+		if (issue.target && this.store.project.targets.includes(issue.target))
+			this.activeTarget = issue.target;
+		if (issue.slideIndex !== undefined) this.store.select(issue.slideIndex);
+		this.error = issue.message;
+		const controlId =
+			issue.control ?? (issue.slideIndex !== undefined ? 'frame-source' : undefined);
+		if (controlId && !['additional-output', 'output-size', 'frames'].includes(controlId))
+			this.inspectorTab = [
+				'headline',
+				'subtitle',
+				'badge',
+				'font-color',
+				'app-name',
+				'frame-source'
+			].includes(controlId)
+				? 'content'
+				: 'device';
+		if (controlId && typeof document !== 'undefined') {
+			requestAnimationFrame(() => {
+				const control = document.getElementById(controlId);
+				for (let parent = control?.parentElement; parent; parent = parent.parentElement)
+					if (parent.tagName === 'DETAILS') (parent as HTMLDetailsElement).open = true;
+				control?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+				control?.focus();
+			});
+		}
+	}
+
+	/** Cheap checklist for the live panel. Export runs the full font, layout and file checks. */
+	async updateReadiness(project: ProjectV2) {
+		if (this.#readiness?.project === project) return;
+		const revision = ++this.#readinessRevision;
+		this.checkingReadiness = true;
+		try {
+			const issues = await quickPreflight(project, { layout: false });
+			if (revision === this.#readinessRevision && this.store.project === project)
+				this.#readiness = { project, issues };
+		} catch (error) {
+			if (revision === this.#readinessRevision && this.store.project === project)
+				this.#readiness = {
+					project,
+					issues: [
+						...sourceIssues(project),
+						{
+							severity: 'block',
+							code: 'readiness-unavailable',
+							message:
+								error instanceof Error
+									? error.message
+									: 'The campaign checklist could not be checked. Open export to try again.'
+						}
+					]
+				};
+		} finally {
+			if (revision === this.#readinessRevision) this.checkingReadiness = false;
+		}
 	}
 
 	moveSlide(delta: number) {
@@ -411,13 +607,9 @@ export class StudioController {
 
 	duplicate() {
 		if (this.composition.slides.length >= MAX_FRAMES) return;
-		const slides = [...this.composition.slides];
-		slides.splice(this.selected + 1, 0, {
-			...JSON.parse(JSON.stringify(this.slide)),
-			id: crypto.randomUUID(),
-			label: `${this.slide.label ?? 'Screenshot'} copy`
+		this.#commitProject(duplicateSlide(this.store.project, this.slide.id, crypto.randomUUID()), {
+			select: this.selected + 1
 		});
-		this.#commit({ ...this.composition, slides }, { select: this.selected + 1 });
 	}
 
 	remove() {
@@ -439,8 +631,9 @@ export class StudioController {
 	}
 
 	newCampaign() {
-		this.#replace(createBlank());
+		this.#replace(createBlankProjectV2(this.store.project.targets));
 		this.activeTab = 'assets';
+		void this.refreshRecovery();
 	}
 
 	toggleLink() {
@@ -500,7 +693,20 @@ export class StudioController {
 	}
 
 	useAsset(image: ImageRef) {
-		this.#commit(this.#withImage(image));
+		const compatibility = sourceCompatibility(image, this.device);
+		if (compatibility.severity === 'block') {
+			this.error = compatibility.message;
+			return;
+		}
+		let next = applyProjectedEdit(this.store.project, this.targetId, this.#withImage(image));
+		const pair = next.panorama;
+		if (
+			pair &&
+			next.continuityMode === 'paired' &&
+			(pair.leftId === this.slide.id || pair.rightId === this.slide.id)
+		)
+			next = bindPanoramaSource(next, this.targetId, image.id);
+		this.#commitProject(next);
 	}
 
 	async upload(files: FileList | null, replace = false) {
@@ -508,31 +714,125 @@ export class StudioController {
 		this.processing = true;
 		this.error = '';
 		try {
-			const images: ImageRef[] = [];
-			for (const file of Array.from(files)) images.push(await readImage(file));
-			if (replace) {
-				this.#commit(this.#withImage(images[0]));
-			} else {
-				const { slide, selected } = this;
-				const available = MAX_FRAMES - this.composition.slides.length;
-				const empty = !slide.primaryImage;
-				const count = Math.min(images.length, available + (empty ? 1 : 0));
-				if (!count)
-					throw new Error(
-						'A campaign can have up to 10 screenshots. Replace an existing image or remove a frame.'
+			if (!this.campaigns)
+				throw new Error('Image storage is unavailable. Try opening the studio again.');
+			const ordered = Array.from(files).sort((a, b) =>
+				a.name.localeCompare(b.name, undefined, { numeric: true })
+			);
+			const batch = await this.campaigns.ingestFiles(ordered, { target: this.device });
+			const added = addAssets(
+				this.store.project,
+				batch.accepted.map((item) => item.asset)
+			);
+			const messages = batch.rejected.map((item) => item.message);
+			const images = batch.accepted.flatMap((item, index) => {
+				if (item.capture.compatibility?.severity === 'block') {
+					messages.push(
+						`${item.capture.name} was kept in the library. ${item.capture.compatibility.message}`
 					);
+					return [];
+				}
+				return [imageRefForAsset(added.project.assets[added.ids[index]])];
+			});
+			let next = added.project;
+			let used = 0;
+			if (replace && images[0]) {
+				next = applyProjectedEdit(next, this.targetId, this.#withImage(images[0]));
+				used = 1;
+			} else if (images.length) {
 				const slides = [...this.composition.slides];
-				images.slice(0, count).forEach((image, i) => {
-					if (empty && i === 0) slides[selected] = { ...slide, primaryImage: image };
-					else slides.push(this.#freshSlide(slides.length, image));
-				});
-				if (this.#commit({ ...this.composition, slides }))
-					this.notify(
-						`${count} screenshot${count === 1 ? '' : 's'} added${count < images.length ? ' (10-frame limit)' : ''}`
+				const empty = slides.flatMap((slide, index) => (!slide.primaryImage ? [index] : []));
+				if (images.length === 1 && empty.includes(this.selected))
+					empty.unshift(...empty.splice(empty.indexOf(this.selected), 1));
+				for (const image of images) {
+					const index = empty.shift();
+					if (index !== undefined) slides[index] = { ...slides[index], primaryImage: image };
+					else if (slides.length < MAX_FRAMES) slides.push(this.#freshSlide(slides.length, image));
+					else break;
+					used++;
+				}
+				next = applyProjectedEdit(next, this.targetId, { ...this.composition, slides });
+				if (used < images.length)
+					messages.push(
+						`${images.length - used} capture(s) stay in the library because this campaign has 10 frames.`
 					);
 			}
+			const pair = next.panorama;
+			if (
+				replace &&
+				images[0] &&
+				pair &&
+				next.continuityMode === 'paired' &&
+				(pair.leftId === this.slide.id || pair.rightId === this.slide.id)
+			)
+				next = bindPanoramaSource(next, this.targetId, images[0].id);
+			if (this.#commitProject(next) && batch.accepted.length)
+				this.notify(
+					`${used} capture${used === 1 ? '' : 's'} placed for ${this.device.label}. ${batch.accepted.length} added to the library.`
+				);
+			if (messages.length) this.error = messages.join(' ');
 		} catch (e) {
 			this.error = e instanceof Error ? e.message : 'Could not read this image.';
+		} finally {
+			this.processing = false;
+		}
+	}
+
+	async uploadArtwork(files: FileList | null) {
+		if (!files?.length || this.processing) return;
+		if ((this.slide.layers?.length ?? 0) >= MAX_SLIDE_LAYERS) {
+			this.error = `A frame can hold ${MAX_SLIDE_LAYERS} layers. Remove one before adding artwork.`;
+			return;
+		}
+		this.processing = true;
+		this.error = '';
+		const target = this.targetId;
+		const slideId = this.slide.id;
+		try {
+			if (!this.campaigns) throw new Error('Image storage is unavailable. Open the studio again.');
+			const batch = await this.campaigns.ingestFiles(files);
+			const added = addAssets(
+				this.store.project,
+				batch.accepted.map((item) => item.asset)
+			);
+			let next = added.project;
+			if (next.targets.includes(target)) {
+				const composition = projectForTarget(next, target);
+				const index = composition.slides.findIndex((slide) => slide.id === slideId);
+				if (index >= 0) {
+					const { width, height } = DEVICES[target];
+					const remaining = MAX_SLIDE_LAYERS - (composition.slides[index].layers?.length ?? 0);
+					const layers = batch.accepted.slice(0, remaining).map((_, i): ImageLayer => {
+						const image = imageRefForAsset(next.assets[added.ids[i]]);
+						const scale = Math.min(
+							MAX_ART_SCALE,
+							(width * 0.55) / image.naturalWidth,
+							(height * 0.22) / image.naturalHeight
+						);
+						return {
+							id: `art-${crypto.randomUUID()}`,
+							kind: 'art',
+							image,
+							crop: { x: 0, y: 0, width: image.naturalWidth, height: image.naturalHeight },
+							x: (width - image.naturalWidth * scale) / 2,
+							y: height * 0.68,
+							scale,
+							shadow: 'none'
+						};
+					});
+					next = applyProjectedEdit(next, target, {
+						...composition,
+						slides: composition.slides.map((slide, i) =>
+							i === index ? { ...slide, layers: [...(slide.layers ?? []), ...layers] } : slide
+						)
+					});
+				}
+			}
+			if (this.#commitProject(next) && batch.accepted.length)
+				this.notify('Artwork added. Its original pixels are kept in your project.');
+			if (batch.rejected.length) this.error = batch.rejected.map((item) => item.message).join(' ');
+		} catch (error) {
+			this.error = error instanceof Error ? error.message : 'Could not open this artwork.';
 		} finally {
 			this.processing = false;
 		}
@@ -541,9 +841,14 @@ export class StudioController {
 	async openProject(files: FileList | null) {
 		if (!files?.[0] || this.processing) return;
 		this.processing = true;
+		this.error = '';
 		try {
-			if (files[0].size > MAX_PROJECT_BYTES) throw new Error('Choose a project file under 60 MB.');
-			if (this.#replace(parseProject(await files[0].text()))) this.notify('Project opened');
+			if (!this.campaigns)
+				throw new Error('Project storage is unavailable. Try opening the studio again.');
+			const file = files[0];
+			if (this.#replace(await this.campaigns.importPortable(await projectTextFromFile(file))))
+				this.notify('Project opened. Your previous campaign is kept in Recent campaigns.');
+			void this.refreshRecovery();
 		} catch (e) {
 			this.error = e instanceof Error ? e.message : 'Could not open project.';
 		} finally {
@@ -553,11 +858,10 @@ export class StudioController {
 
 	async saveFile() {
 		try {
-			const portable = await portableComposition(this.composition);
-			download(
-				new Blob([JSON.stringify(portable)], { type: 'application/json' }),
-				`${this.filename}.appshot.json`
-			);
+			if (!this.campaigns)
+				throw new Error('Project storage is unavailable. Try opening the studio again.');
+			const portable = await this.campaigns.exportPortable(this.store.project);
+			download(portable, `${this.filename}.appshot.json`);
 			this.notify('Project file saved, with your original images');
 		} catch (e) {
 			this.error = e instanceof Error ? e.message : 'Could not save the project.';
@@ -567,6 +871,7 @@ export class StudioController {
 	/** The current campaign recolored for a style card, without touching the document. */
 	stylePreview(id: StyleId): Composition {
 		const theme = getStyle(id);
+		if (id === 'the-check') return applyCheckStyle(this.composition);
 		return {
 			...this.composition,
 			style: id,
@@ -579,6 +884,62 @@ export class StudioController {
 				typography: { ...s.typography, fontColor: theme.foreground }
 			}))
 		};
+	}
+
+	async refreshRecovery() {
+		if (!this.campaigns) return;
+		try {
+			this.recoverable = await this.campaigns.listRecoverable();
+		} catch {
+			/* The save status already reports unavailable storage. */
+		}
+	}
+
+	async openRecovery(id: string) {
+		if (!this.campaigns || this.processing) return;
+		this.processing = true;
+		try {
+			await this.store.flush();
+			if (this.#replace(await this.campaigns.openRecoverable(id))) {
+				this.recoveryOpen = false;
+				this.notify('Saved campaign opened.');
+			}
+		} catch (error) {
+			this.error = error instanceof Error ? error.message : 'Could not open that campaign.';
+		} finally {
+			this.processing = false;
+		}
+	}
+
+	async downloadRecovery(id: string) {
+		if (!this.campaigns) return;
+		try {
+			const item = this.recoverable.find((item) => item.id === id);
+			download(
+				await this.campaigns.exportRecoverable(id),
+				`${(item?.title ?? 'recovered-project').replace(/[^a-z0-9-]+/gi, '-')}.appshot.json`
+			);
+		} catch (error) {
+			this.error = error instanceof Error ? error.message : 'Could not download that saved data.';
+		}
+	}
+
+	async keepConflictCopy() {
+		if (!this.campaigns || this.processing) return;
+		this.processing = true;
+		try {
+			this.campaigns.keepAsCopy(this.store.project);
+			await this.store.saveNow();
+			if (this.store.status === 'saved') {
+				this.conflict = null;
+				this.notify(
+					'Your edits are saved as a separate campaign. The other tab’s campaign is kept.'
+				);
+				await this.refreshRecovery();
+			}
+		} finally {
+			this.processing = false;
+		}
 	}
 }
 

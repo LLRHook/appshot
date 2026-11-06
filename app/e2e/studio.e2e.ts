@@ -1,10 +1,13 @@
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import { readFile, mkdir } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
-import type { Composition } from '../src/lib/model/types';
+import type { ProjectV2 } from '../src/lib/model/contracts';
+import { projectForTarget } from '../src/lib/model/targets';
 
 const fixture = (name: string) => path.resolve('static/demo', `${name}.png`);
 const frames = (page: Page) => page.getByRole('button', { name: /^Select screenshot \d+$/ });
+const composition = (project: ProjectV2) => projectForTarget(project, project.targets[0]);
 
 async function openStudio(page: Page) {
 	await page.goto('/');
@@ -30,7 +33,7 @@ async function saveProjectFile(page: Page, testInfo: TestInfo, name = 'project.a
 	await download.saveAs(destination);
 	return {
 		file: destination,
-		project: JSON.parse(await readFile(destination, 'utf8')) as Composition
+		project: JSON.parse(await readFile(destination, 'utf8')) as ProjectV2
 	};
 }
 
@@ -38,6 +41,8 @@ async function exportFile(page: Page, testInfo: TestInfo, action: string, name: 
 	await page.getByRole('button', { name: 'Export set' }).click();
 	const dialog = page.getByRole('dialog');
 	await expect(dialog).toBeVisible();
+	if (action === 'Download draft set')
+		await dialog.getByRole('button', { name: 'Draft set', exact: true }).click();
 	const pending = page.waitForEvent('download');
 	await dialog.getByRole('button', { name: action }).click();
 	const download = await pending;
@@ -82,7 +87,7 @@ test('renders every word of the accepted 220-character supporting copy in the ex
 	await page.evaluate(() => {
 		(window as TextCaptureWindow).appshotTextCalls.length = 0;
 	});
-	const exported = await exportFile(page, testInfo, 'Selected PNG', 'complete-supporting-copy.png');
+	const exported = await exportFile(page, testInfo, 'Draft PNG', 'complete-supporting-copy.png');
 	expect(pngDimensions(exported.bytes)).toEqual({ width: 1320, height: 2868 });
 	const drawn = await page.evaluate(() =>
 		(window as TextCaptureWindow).appshotTextCalls
@@ -123,11 +128,12 @@ for (const limits of [
 		await page.evaluate(() => {
 			(window as TextCaptureWindow).appshotTextCalls.length = 0;
 		});
-		await exportFile(page, testInfo, 'Selected PNG', 'maximum-text.png');
+		await exportFile(page, testInfo, 'Draft PNG', 'maximum-text.png');
 		const calls = await page.evaluate(() => (window as TextCaptureWindow).appshotTextCalls);
 		const start = calls.findIndex((call) => call.text === 'Made for the table') + 1;
-		const end = calls.findIndex((call, index) => index >= start && call.text === 'BILLINGTON');
 		expect(start).toBeGreaterThan(0);
+		// A pair paints its neighbor into the shared buffer too; its wordmark ends this frame's copy.
+		const end = calls.findIndex((call, index) => index >= start && call.text === 'Billington');
 		expect(end).toBeGreaterThan(start);
 		const content = calls.slice(start, end);
 		const drawn = content
@@ -172,6 +178,88 @@ function pngDimensions(bytes: Buffer) {
 	return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
 }
 
+test('the Studio exports both output sizes and labels a selected-size archive partial', async ({
+	page
+}, testInfo) => {
+	await openStudio(page);
+	await page.getByRole('button', { name: 'New campaign', exact: true }).click();
+	await page.getByLabel('Campaign name').fill('Matrix UI fixture');
+	await page.getByLabel('Campaign name').press('Tab');
+	await page.getByLabel('Headline', { exact: false }).fill('Split dinner clearly.');
+	for (const [target, width, height] of [
+		['iphone-6.9', 1320, 2868],
+		['iphone-di-medium-1206x2622', 1206, 2622]
+	] as const) {
+		await page.getByLabel('Active output').selectOption(target);
+		const encoded = await page.evaluate(
+			({ width, height }) => {
+				const canvas = document.createElement('canvas');
+				canvas.width = width;
+				canvas.height = height;
+				const ctx = canvas.getContext('2d', { alpha: false })!;
+				ctx.fillStyle = '#fbf6ef';
+				ctx.fillRect(0, 0, width, height);
+				ctx.fillStyle = '#245c57';
+				ctx.fillRect(80, 180, width - 160, height - 360);
+				ctx.fillStyle = '#e8c86c';
+				ctx.fillRect(140, 300, width - 280, 350);
+				return canvas.toDataURL('image/png').split(',')[1];
+			},
+			{ width, height }
+		);
+		await page.getByLabel('Upload screenshots', { exact: true }).setInputFiles({
+			name: `SYNTHETIC-${target}.png`,
+			mimeType: 'image/png',
+			buffer: Buffer.from(encoded, 'base64')
+		});
+		await expect(page.locator('.studio')).not.toHaveClass(/loading/);
+		await expect(page.locator('.target-row.active')).toContainText('1/1 captures');
+	}
+	const full = await exportFile(page, testInfo, 'Download draft set', 'two-output-ui.zip');
+	const files = zipEntries(full.bytes);
+	const manifest = JSON.parse(files.get('manifest.json')!.toString());
+	expect(manifest.partial).toBe(false);
+	expect(manifest.scope).toBe('draft');
+	expect(manifest.files).toHaveLength(2);
+	for (const file of manifest.files) {
+		const png = files.get(file.path)!;
+		expect(png).toBeDefined();
+		expect(png[25]).toBe(2); // RGB, independently read from IHDR.
+		expect(createHash('sha256').update(png).digest('hex')).toBe(file.sha256);
+	}
+	expect(
+		[...files.entries()]
+			.filter(([name]) => name.endsWith('.png'))
+			.map(([, png]) => pngDimensions(png))
+	).toEqual(
+		expect.arrayContaining([
+			{ width: 1320, height: 2868 },
+			{ width: 1206, height: 2622 }
+		])
+	);
+	const portable = JSON.parse(files.get('project.json')!.toString()) as ProjectV2;
+	expect(portable.targets).toEqual(
+		expect.arrayContaining(['iphone-6.9', 'iphone-di-medium-1206x2622'])
+	);
+	expect(Object.values(portable.assets)).toHaveLength(2);
+	await page.getByRole('button', { name: 'Export set' }).click();
+	const dialog = page.getByRole('dialog');
+	await dialog.getByLabel('Output sizes', { exact: true }).selectOption('current');
+	const [download] = await Promise.all([
+		page.waitForEvent('download', { timeout: 20_000 }),
+		dialog.getByRole('button', { name: /^Download draft set/ }).click({ timeout: 15_000 })
+	]);
+	expect(download.suggestedFilename()).toContain('DRAFT-PARTIAL');
+	const subset = zipEntries(await readFile((await download.path())!));
+	const subsetManifest = JSON.parse(subset.get('manifest.json')!.toString());
+	expect(subsetManifest.partial).toBe(true);
+	expect(subsetManifest.files).toHaveLength(1);
+	expect(subset.has('PARTIAL-NOT-A-COMPLETE-SET.txt')).toBe(true);
+	expect((JSON.parse(subset.get('project.json')!.toString()) as ProjectV2).targets).toHaveLength(2);
+	await expect(dialog.getByRole('alert')).toContainText('partial');
+	await dialog.getByRole('button', { name: 'Close export dialog' }).click();
+});
+
 test('edits a campaign, restores local changes, and opens a saved project in a fresh browser', async ({
 	page,
 	browser
@@ -207,7 +295,12 @@ test('edits a campaign, restores local changes, and opens a saved project in a f
 		'true'
 	);
 	const saved = await saveProjectFile(page, testInfo);
-	expect(saved.project.slides[2]).toMatchObject({ layout: 'text-below', frame: 'clay', tilt: 30 });
+	expect(saved.project.version).toBe(2);
+	expect(composition(saved.project).slides[2]).toMatchObject({
+		layout: 'text-below',
+		frame: 'clay',
+		tilt: 30
+	});
 	expect(saved.project.slides[0].badge).toBe('Good company');
 	const clean = await browser.newContext();
 	try {
@@ -258,7 +351,7 @@ test('uploads real screenshots, connects frames, reorders, duplicates, deletes, 
 	expect(new Set(reordered.project.slides.map((slide) => slide.id)).size).toBe(3);
 	expect(reordered.project.continuityMode).toBe('none');
 	expect(
-		reordered.project.slides.every((slide) =>
+		composition(reordered.project).slides.every((slide) =>
 			slide.primaryImage?.blobUrl.startsWith('data:image/png;base64,')
 		)
 	).toBe(true);
@@ -272,7 +365,7 @@ test('uploads real screenshots, connects frames, reorders, duplicates, deletes, 
 	await page.getByLabel('Replace screenshot', { exact: true }).setInputFiles(fixture('share'));
 	await expect(page.getByRole('img', { name: 'Current raw screenshot' })).toHaveAttribute(
 		'src',
-		/^data:image\/png;base64,/
+		/^blob:/
 	);
 	await expect(page.locator('.save-status')).toHaveText('All changes saved');
 	await page.reload();
@@ -281,7 +374,7 @@ test('uploads real screenshots, connects frames, reorders, duplicates, deletes, 
 	await expect(page.getByLabel('Headline', { exact: false })).toHaveValue('Dinner with friends');
 });
 
-test('downloads a complete ZIP of exact-size PNGs and a portable editable project', async ({
+test('downloads a labelled draft ZIP of exact-size PNGs and reopens its portable project', async ({
 	page,
 	browser
 }, testInfo) => {
@@ -289,39 +382,48 @@ test('downloads a complete ZIP of exact-size PNGs and a portable editable projec
 	const exported = await exportFile(
 		page,
 		testInfo,
-		'Download complete set',
+		'Download draft set',
 		'billington-app-store-set.zip'
 	);
-	expect(exported.filename).toBe('billington-app-store-set.zip');
+	expect(exported.filename).toBe('billington-DRAFT-app-store-set.zip');
 	const entries = zipEntries(exported.bytes);
 	const pngs = [...entries.entries()].filter(([name]) => name.endsWith('.png'));
 	expect(pngs).toHaveLength(5);
-	expect(entries.size).toBe(6);
+	expect(entries.size).toBe(8);
 	for (const [[name, bytes], index] of pngs.map((entry, index) => [entry, index] as const)) {
-		expect(name).toMatch(new RegExp(`^0${index + 1}-.+-1320x2868\\.png$`));
+		expect(name).toMatch(
+			new RegExp(`^DRAFT-NOT-FOR-APP-STORE/.+/DRAFT-0${index + 1}-.+-1320x2868\\.png$`)
+		);
 		expect(pngDimensions(bytes)).toEqual({ width: 1320, height: 2868 });
 		expect(bytes.length).toBeGreaterThan(50_000);
 	}
 	const embedded = entries.get('project.json');
 	expect(embedded).toBeDefined();
-	const project = JSON.parse(embedded!.toString()) as Composition;
+	const project = JSON.parse(embedded!.toString()) as ProjectV2;
+	expect(project.version).toBe(2);
+	const manifest = JSON.parse(entries.get('manifest.json')!.toString());
+	expect(manifest.scope).toBe('draft');
+	expect(manifest.readiness).toBe('draft-not-store-ready');
+	expect(manifest.files).toHaveLength(5);
 	expect(
-		project.slides.every((slide) =>
+		composition(project).slides.every((slide) =>
 			slide.primaryImage?.blobUrl.startsWith('data:image/png;base64,')
 		)
 	).toBe(true);
-	expect(project.panorama?.image.blobUrl).toMatch(/^data:image\/png;base64,/);
+	expect(composition(project).panorama?.image.blobUrl).toMatch(/^data:image\/png;base64,/);
 	const isolated = await browser.newContext();
 	try {
 		const imported = await isolated.newPage();
 		await imported.goto(page.url());
 		await expect(imported.locator('.studio')).not.toHaveClass(/loading/);
 		await imported.route('**/demo/*.png', (route) => route.abort());
-		await imported
-			.getByLabel('Open Appshot project')
-			.setInputFiles({ name: 'project.json', mimeType: 'application/json', buffer: embedded! });
+		await imported.getByLabel('Open Appshot project').setInputFiles({
+			name: exported.filename,
+			mimeType: 'application/zip',
+			buffer: exported.bytes
+		});
 		await expect(imported.getByRole('status')).toContainText('Project opened');
-		const roundTrip = await exportFile(imported, testInfo, 'Selected PNG', 'reopened-first.png');
+		const roundTrip = await exportFile(imported, testInfo, 'Draft PNG', 'reopened-first.png');
 		expect(pngDimensions(roundTrip.bytes)).toEqual({ width: 1320, height: 2868 });
 		expect(roundTrip.bytes.equals(pngs[0][1])).toBe(true);
 	} finally {
@@ -338,12 +440,36 @@ test('exports the selected frame at an alternate size and a contact sheet', asyn
 }, testInfo) => {
 	await openStudio(page);
 	await page.getByRole('button', { name: 'Select screenshot 3', exact: true }).click();
-	await page.getByLabel('Export size', { exact: false }).selectOption('ipad-13');
-	const single = await exportFile(page, testInfo, 'Selected PNG', 'ipad-selected.png');
-	expect(single.filename).toBe('billington-03.png');
+	await page.getByLabel('Active output').selectOption('ipad-13');
+	await expect(page.locator('.current-asset img')).toHaveCount(0);
+	const buffer = await page.evaluate(() => {
+		const canvas = document.createElement('canvas');
+		canvas.width = 2064;
+		canvas.height = 2752;
+		const ctx = canvas.getContext('2d', { alpha: false })!;
+		ctx.fillStyle = '#fbf6ef';
+		ctx.fillRect(0, 0, canvas.width, canvas.height);
+		ctx.fillStyle = '#245c57';
+		ctx.fillRect(120, 240, 1824, 2000);
+		ctx.fillStyle = '#fff';
+		ctx.font = '80px sans-serif';
+		ctx.fillText('SYNTHETIC IPAD TEST FIXTURE', 160, 450);
+		return canvas.toDataURL('image/png').split(',')[1];
+	});
+	await page.getByLabel('Upload screenshots', { exact: true }).setInputFiles(
+		Array.from({ length: 5 }, (_, index) => ({
+			name: `ipad-test-${index}.png`,
+			mimeType: 'image/png',
+			buffer: Buffer.from(buffer, 'base64')
+		}))
+	);
+	await expect(page.locator('.studio')).not.toHaveClass(/loading/);
+	await expect(page.locator('.target-row.active')).toContainText('5/5 captures');
+	const single = await exportFile(page, testInfo, 'Draft PNG', 'ipad-selected.png');
+	expect(single.filename).toBe('DRAFT-billington-03.png');
 	expect(pngDimensions(single.bytes)).toEqual({ width: 2064, height: 2752 });
-	const sheet = await exportFile(page, testInfo, 'Contact sheet', 'contact-sheet.png');
-	expect(sheet.filename).toBe('billington-contact-sheet.png');
+	const sheet = await exportFile(page, testInfo, 'Draft contact sheet', 'contact-sheet.png');
+	expect(sheet.filename).toBe('DRAFT-billington-contact-sheet.png');
 	const dimensions = pngDimensions(sheet.bytes);
 	expect(dimensions.width).toBeGreaterThan(dimensions.height);
 	expect(dimensions.width).toBeGreaterThan(2000);
@@ -357,12 +483,10 @@ test('guards missing screenshots and reports invalid uploads without losing work
 	await page.getByRole('button', { name: 'New campaign', exact: true }).click();
 	await page.getByRole('button', { name: 'Export set' }).click();
 	const dialog = page.getByRole('dialog');
-	await expect(
-		dialog.getByText('Some frames have no app screenshot.', { exact: false })
-	).toBeVisible();
-	await expect(dialog.getByRole('button', { name: 'Download complete set' })).toBeDisabled();
-	await expect(dialog.getByRole('button', { name: 'Selected PNG' })).toBeDisabled();
-	await expect(dialog.getByRole('button', { name: 'Contact sheet' })).toBeDisabled();
+	await expect(dialog.getByText('has no capture', { exact: false })).toBeVisible();
+	await expect(dialog.getByRole('button', { name: 'Download screenshot set' })).toBeDisabled();
+	await expect(dialog.getByRole('button', { name: 'Draft PNG' })).toBeDisabled();
+	await expect(dialog.getByRole('button', { name: 'Draft contact sheet' })).toBeDisabled();
 	await dialog.getByRole('button', { name: 'Close export dialog' }).click();
 	await page.getByLabel('Upload screenshots', { exact: true }).setInputFiles({
 		name: 'notes.txt',
@@ -376,14 +500,15 @@ test('guards missing screenshots and reports invalid uploads without losing work
 		mimeType: 'application/json',
 		buffer: Buffer.from('{"version":99}')
 	});
-	await expect(page.getByRole('alert')).toContainText('Choose a valid Appshot project');
+	await expect(page.getByRole('alert')).toContainText('project version 99');
 	await expect(page.getByLabel('Campaign name')).toHaveValue('Untitled campaign');
 	await expect(frames(page)).toHaveCount(1);
 	await page.getByRole('button', { name: 'Dismiss error' }).click();
 	await page.getByLabel('Upload screenshots', { exact: true }).setInputFiles(fixture('home'));
 	await page.getByRole('button', { name: 'Export set' }).click();
-	await expect(dialog.getByRole('button', { name: 'Download complete set' })).toBeEnabled();
-	await expect(dialog.getByRole('button', { name: 'Selected PNG' })).toBeEnabled();
+	await expect(dialog.getByRole('button', { name: 'Download screenshot set' })).toBeDisabled();
+	await expect(dialog.getByText('medium is required', { exact: false })).toBeVisible();
+	await expect(dialog.getByRole('button', { name: 'Draft PNG' })).toBeEnabled();
 });
 
 test('exports one image across a connected pair with a blank neighboring frame', async ({
@@ -399,14 +524,14 @@ test('exports one image across a connected pair with a blank neighboring frame',
 	await page.getByRole('switch', { name: 'Connect adjacent screenshots' }).click();
 	await page.getByRole('button', { name: 'Select screenshot 2', exact: true }).click();
 	await expect(page.getByRole('switch', { name: 'Connect adjacent screenshots' })).toBeChecked();
-	const exported = await exportFile(page, testInfo, 'Download complete set', 'connected-pair.zip');
+	const exported = await exportFile(page, testInfo, 'Download draft set', 'connected-pair.zip');
 	const entries = zipEntries(exported.bytes);
 	const pngs = [...entries.entries()].filter(([name]) => name.endsWith('.png'));
 	expect(pngs).toHaveLength(2);
 	for (const [, bytes] of pngs) expect(pngDimensions(bytes)).toEqual({ width: 1320, height: 2868 });
-	const project = JSON.parse(entries.get('project.json')!.toString()) as Composition;
-	expect(project.slides[1].primaryImage).toBeUndefined();
-	expect(project.panorama?.image.blobUrl).toMatch(/^data:image\/png;base64,/);
+	const project = JSON.parse(entries.get('project.json')!.toString()) as ProjectV2;
+	expect(composition(project).slides[1].primaryImage).toBeUndefined();
+	expect(composition(project).panorama?.image.blobUrl).toMatch(/^data:image\/png;base64,/);
 });
 
 test('normalizes differing frame treatments when linking and keeps paired edits consistent', async ({
@@ -429,9 +554,10 @@ test('normalizes differing frame treatments when linking and keeps paired edits 
 	await expect(page.getByLabel('Device frame', { exact: true })).toHaveValue('wireframe');
 	await expect(page.getByLabel('Background fill')).toHaveValue('linear');
 	const saved = await saveProjectFile(page, testInfo, 'paired-treatments.appshot.json');
-	expect(saved.project.slides[2].frame).toBe(saved.project.slides[3].frame);
-	expect(saved.project.slides[2].background).toEqual(saved.project.slides[3].background);
-	expect(saved.project.slides[2].effects).toEqual(saved.project.slides[3].effects);
+	const slides = composition(saved.project).slides;
+	expect(slides[2].frame).toBe(slides[3].frame);
+	expect(slides[2].background).toEqual(slides[3].background);
+	expect(slides[2].effects).toEqual(slides[3].effects);
 });
 
 test('keeps editing and export controls usable at a 390px viewport', async ({ page }, testInfo) => {
@@ -453,7 +579,10 @@ test('keeps editing and export controls usable at a 390px viewport', async ({ pa
 	expect(box!.x).toBeGreaterThanOrEqual(0);
 	expect(box!.x + box!.width).toBeLessThanOrEqual(390);
 	await expect(
-		page.getByRole('dialog').getByRole('button', { name: 'Download complete set' })
+		page.getByRole('dialog').getByRole('button', { name: 'Download screenshot set' })
+	).toBeDisabled();
+	await expect(
+		page.getByRole('dialog').getByRole('button', { name: 'Draft PNG', exact: true })
 	).toBeEnabled();
 	await page.screenshot({
 		path: await artifactPath(testInfo, 'studio-mobile-export.png'),

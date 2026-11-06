@@ -10,6 +10,7 @@
  * The renderer stays single-target and never infers a missing source: it paints the Composition
  * it is given. Choosing, validating and reporting sources happen before it.
  */
+import type { CheckSettingsPatch } from './check';
 import type { DeviceId, DeviceSize } from './devices';
 import type { LinenHardwareModel, LinenPhone, LinenSettings } from './linen';
 import type { StyleId } from './studio';
@@ -230,6 +231,8 @@ export interface SlideVariant {
 	source?: SourceBinding;
 	/** Replaces whole settings groups (`layout`, `phone`, ...) for this target. */
 	linen?: Partial<LinenSettings>;
+	/** Whole keys replace the slide's. A pen mark's region is source pixels, so it varies here. */
+	check?: CheckSettingsPatch;
 	scale?: number;
 	tilt?: number;
 	fontScale?: number;
@@ -260,6 +263,11 @@ export interface StoredPanorama extends Omit<Panorama, 'image'> {
 /** The saved campaign. One story and one set of copy, targeting several outputs. */
 export interface ProjectV2 {
 	version: 2;
+	/**
+	 * Which local autosave slot this document belongs to, so undoing across New or Open resumes the
+	 * right slot. Session state assigned by persistence: never read from or written to a file.
+	 */
+	campaignId?: string;
 	/** Working title. */
 	name: string;
 	/** Brand name printed in scenes, separate from the working title. Falls back to `name`. */

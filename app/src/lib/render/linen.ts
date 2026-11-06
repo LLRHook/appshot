@@ -1,4 +1,4 @@
-import { DEVICES } from '../model/devices';
+import { DEVICES, type DeviceSize } from '../model/devices';
 import {
 	LINEN_COPY_CLEARANCE,
 	LINEN_REFERENCE,
@@ -20,6 +20,8 @@ import {
 } from '../model/linen';
 import type { Composition, Slide } from '../model/types';
 import type { PanoramaGeometry } from '../stitch/panorama';
+import { faceLoaded, loadBundledFonts } from './fonts';
+import { frameProfileError, rasterScale } from './frames';
 
 /**
  * Table Linen scene painter. Draw order and arithmetic follow the external
@@ -38,38 +40,13 @@ interface Panel {
 	height: number;
 }
 
-let linenFontsReady: Promise<void> | undefined;
-
-function faceLoaded(family: string, style: string): boolean {
-	let found = false;
-	document.fonts.forEach((face) => {
-		if (
-			face.family.replace(/^["']|["']$/g, '') === family &&
-			face.style === style &&
-			face.status === 'loaded'
-		)
-			found = true;
-	});
-	return found;
-}
-
 /** Await the real Instrument Serif italic; a synthesized oblique would silently differ. */
 export async function loadLinenFonts(): Promise<void> {
-	linenFontsReady ??= (async () => {
-		await Promise.all([
-			document.fonts.load('400 118px "Instrument Serif"'),
-			document.fonts.load('italic 400 118px "Instrument Serif"'),
-			document.fonts.load('400 44px "DM Sans"'),
-			document.fonts.load('500 34px "DM Sans"')
-		]);
-		if (!faceLoaded('Instrument Serif', 'normal') || !faceLoaded('Instrument Serif', 'italic')) {
-			linenFontsReady = undefined;
-			throw new Error(
-				'The Instrument Serif regular and italic fonts could not be loaded, so Table Linen cannot be drawn accurately.'
-			);
-		}
-	})();
-	await linenFontsReady;
+	await loadBundledFonts();
+	if (!faceLoaded('Instrument Serif', 'normal') || !faceLoaded('Instrument Serif', 'italic'))
+		throw new Error(
+			'The Instrument Serif regular and italic fonts could not be loaded, so Table Linen cannot be drawn accurately.'
+		);
 }
 
 function rounded(ctx: Context, x: number, y: number, w: number, h: number, r: number) {
@@ -260,16 +237,6 @@ export function linenCopy(
 }
 
 /**
- * Canvas shadows are applied in device pixels and ignore the current transform, so the
- * preview's raster scale has to be multiplied in by hand. Read before any rotation so a
- * 1320-wide export at scale 1 gets exactly 80 / 40.
- */
-function rasterScale(ctx: Context): number {
-	const transform = ctx.getTransform();
-	return Math.hypot(transform.a, transform.b) || 1;
-}
-
-/**
  * Trivial duplicate-island guard shared with the V2 renderer: a capture whose island
  * centre is already dark keeps its own island. Samples one decoded pixel; the capture
  * itself is never modified.
@@ -407,8 +374,11 @@ function checkPhone(
 	worldWidth: number,
 	height: number,
 	copyBottom: number,
-	scale: LinenScale
+	scale: LinenScale,
+	target: DeviceSize
 ) {
+	const wrongHardware = frameProfileError(phone.hardware, target);
+	if (wrongHardware) throw new Error(wrongHardware);
 	const fit = linenPhoneFitError(box, phone, worldWidth, height);
 	if (fit) throw new Error(fit);
 	const clearance = copyBottom + LINEN_COPY_CLEARANCE * scale.sy;
@@ -447,7 +417,7 @@ export function drawLinenScene(
 		);
 		const phone = resolveSharedLinenPhone(composition);
 		const box = linenPhoneBox(phone, composition.panorama!.image, scale);
-		checkPhone(box, phone, width * 2, height, copyBottom, scale);
+		checkPhone(box, phone, width * 2, height, copyBottom, scale, DEVICES[composition.device]);
 		const seam = linenSeamError(box, width, width * 2);
 		if (seam) throw new Error(seam);
 		// Hardware colors (shell, edge, shadow) come from the left frame; copy stays per frame.
@@ -460,7 +430,7 @@ export function drawLinenScene(
 	linenBackground(ctx, settings, 0, width, height, scale);
 	const copyBottom = linenCopy(ctx, name, slide, settings, 0, scale, panel);
 	const box = linenPhoneBox(settings.phone, slide.primaryImage ?? LINEN_REFERENCE_SOURCE, scale);
-	checkPhone(box, settings.phone, width, height, copyBottom, scale);
+	checkPhone(box, settings.phone, width, height, copyBottom, scale, DEVICES[composition.device]);
 	linenPhone(ctx, box, settings.phone, settings.colors, scale, source);
 }
 

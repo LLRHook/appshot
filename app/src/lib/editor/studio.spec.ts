@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_PROJECT_BYTES } from '$lib/model/limits';
 import { createDemo } from '$lib/model/studio';
-import type { Composition } from '$lib/model/types';
+import type { ProjectV2 } from '$lib/model/contracts';
 import { legacyPersistence, type ProjectPersistence } from './persistence';
 import { StudioController, isTextEntry } from './studio.svelte';
 
-function studioWith(options: Partial<ProjectPersistence<Composition>> = {}) {
+function studioWith(options: Partial<ProjectPersistence<ProjectV2>> = {}) {
 	return new StudioController({ load: async () => null, save: async () => {}, ...options });
 }
 
@@ -156,6 +156,119 @@ describe('StudioController commands through the store', () => {
 	});
 });
 
+describe('multi-target editor commands', () => {
+	it('reports missing required display coverage and the future Duo requirement', async () => {
+		const studio = studioWith();
+		await studio.updateReadiness(studio.store.project);
+		expect(
+			studio.issues.some(
+				(issue) => issue.code === 'required-class-missing' && issue.severity === 'block'
+			)
+		).toBe(true);
+		expect(
+			studio.issues.some((issue) => issue.code === 'future-class' && issue.severity === 'info')
+		).toBe(true);
+	});
+
+	it('drops a stale coverage check as soon as the campaign changes', async () => {
+		const studio = studioWith();
+		await studio.updateReadiness(studio.store.project);
+		studio.chooseDevice('iphone-di-medium-1206x2622');
+		expect(studio.issues.some((issue) => issue.code === 'required-class-missing')).toBe(false);
+		await studio.updateReadiness(studio.store.project);
+		expect(studio.issues.some((issue) => issue.code === 'required-class-missing')).toBe(false);
+		expect(studio.issues.some((issue) => issue.code === 'missing-source')).toBe(true);
+	});
+
+	it('starts a new output without borrowing another display’s captures', () => {
+		const studio = studioWith();
+		const original = studio.slide.primaryImage;
+		studio.chooseDevice('iphone-di-medium-1206x2622');
+		expect(studio.store.project.targets).toEqual(['iphone-6.9', 'iphone-di-medium-1206x2622']);
+		expect(studio.slide.primaryImage).toBeUndefined();
+		expect(studio.composition.panorama).toBeUndefined();
+		expect(
+			studio.issues.some(
+				(issue) => issue.code === 'missing-source' && issue.target === studio.targetId
+			)
+		).toBe(true);
+		studio.chooseDevice('iphone-6.9');
+		expect(studio.slide.primaryImage).toEqual(original);
+		expect(studio.isLinked).toBe(true);
+	});
+
+	it('shares copy while preserving a separate placement for each output', () => {
+		const studio = studioWith();
+		const originalScale = studio.slide.scale;
+		studio.chooseDevice('iphone-di-medium-1206x2622');
+		studio.typography('headline', 'One shared story');
+		studio.patchSlide({ scale: 1.25 });
+		studio.chooseDevice('iphone-6.9');
+		expect(studio.slide.typography.headline).toBe('One shared story');
+		expect(studio.slide.scale).toBe(originalScale);
+		studio.chooseDevice('iphone-di-medium-1206x2622');
+		expect(studio.slide.scale).toBe(1.25);
+	});
+
+	it('explains and refuses a phone capture chosen for iPad', () => {
+		const studio = studioWith();
+		const phone = studio.assets[0];
+		studio.chooseDevice('ipad-13');
+		studio.useAsset(phone);
+		expect(studio.error).toContain('capture');
+		expect(studio.error).toContain('iPad');
+		expect(studio.slide.primaryImage).toBeUndefined();
+		expect(studio.assets.some((asset) => asset.id === phone.id)).toBe(true);
+	});
+
+	it('duplicates every output’s bindings and keeps the assets shared', () => {
+		const studio = studioWith();
+		studio.chooseDevice('iphone-di-medium-1206x2622');
+		const project = studio.store.project;
+		const original = project.slides[0];
+		studio.store.apply({
+			...project,
+			slides: [
+				{
+					...original,
+					variants: { ...original.variants, 'iphone-di-medium-1206x2622': { scale: 0.9 } }
+				},
+				...project.slides.slice(1)
+			]
+		});
+		const assets = studio.store.project.assets;
+		studio.duplicate();
+		expect(studio.store.project.slides[1].variants).toEqual(
+			studio.store.project.slides[0].variants
+		);
+		expect(studio.store.project.slides[1].id).not.toBe(studio.store.project.slides[0].id);
+		expect(studio.store.project.assets).toBe(assets);
+	});
+
+	it('keeps the working title separate from the brand printed on screenshots', () => {
+		const studio = studioWith();
+		studio.setName('Summer campaign');
+		expect(studio.store.project.name).toBe('Summer campaign');
+		expect(studio.composition.name).toBe('Billington');
+		studio.setAppName('Billington Plus');
+		expect(studio.composition.name).toBe('Billington Plus');
+		expect(studio.store.project.name).toBe('Summer campaign');
+	});
+
+	it('keeps a valid output selected after removal and restores the target on undo', () => {
+		const studio = studioWith();
+		studio.chooseDevice('ipad-13');
+		studio.removeOutput('ipad-13');
+		expect(studio.targetId).toBe('iphone-6.9');
+		studio.store.undo();
+		expect(studio.targetId).toBe('ipad-13');
+		studio.removeOutput('ipad-13');
+		studio.removeOutput('iphone-6.9');
+		expect(studio.store.project.targets).toEqual(['iphone-6.9']);
+		expect(studio.error).toContain('at least one output');
+	});
+});
+
 describe('keyboard undo', () => {
 	const key = (target: unknown, init: Partial<KeyboardEvent> = {}) =>
 		({
@@ -186,10 +299,10 @@ describe('keyboard undo', () => {
 		const studio = await readyStudio();
 		const event = key(target);
 		studio.handleKeydown(event);
-		expect(studio.composition.name).toBe('Billington');
+		expect(studio.store.project.name).toBe('Billington');
 		expect(event.preventDefault).toHaveBeenCalled();
 		studio.handleKeydown(key(target, { shiftKey: true }));
-		expect(studio.composition.name).toBe('Edited');
+		expect(studio.store.project.name).toBe('Edited');
 	});
 
 	it.each([
@@ -201,7 +314,7 @@ describe('keyboard undo', () => {
 		const studio = await readyStudio();
 		const event = key(target);
 		studio.handleKeydown(event);
-		expect(studio.composition.name).toBe('Edited');
+		expect(studio.store.project.name).toBe('Edited');
 		expect(event.preventDefault).not.toHaveBeenCalled();
 	});
 
@@ -209,20 +322,20 @@ describe('keyboard undo', () => {
 		const studio = await readyStudio();
 		studio.handleKeydown(key({ tagName: 'BODY' }, { key: 'y' }));
 		studio.handleKeydown(key({ tagName: 'BODY' }, { metaKey: false }));
-		expect(studio.composition.name).toBe('Edited');
+		expect(studio.store.project.name).toBe('Edited');
 		studio.exportDialog = { open: true } as HTMLDialogElement;
 		studio.handleKeydown(key({ tagName: 'BODY' }));
-		expect(studio.composition.name).toBe('Edited');
+		expect(studio.store.project.name).toBe('Edited');
 	});
 
 	it('ignores shortcuts before the workspace is ready', async () => {
 		const studio = await readyStudio();
 		const opening = studioWith();
-		opening.store.apply({ ...opening.composition, name: 'Edited' });
+		opening.store.apply({ ...opening.store.project, name: 'Edited' });
 		await opening.store.flush();
 		studio.processing = true;
 		studio.handleKeydown(key({ tagName: 'BODY' }));
-		expect(studio.composition.name).toBe('Edited');
+		expect(studio.store.project.name).toBe('Edited');
 	});
 
 	it('classifies a missing target as not text entry', () => {

@@ -17,10 +17,18 @@ export const INVALID_IMAGE =
 const INVALID_IMAGE_SIZE =
 	'Choose a screenshot under 24 megapixels, with each side under 8000 pixels.';
 
-/** Only bundled demo assets or embedded PNG/JPEG/WebP data URLs with a real signature. */
+const BUNDLED_IMAGE =
+	/^\/(?:demo\/(?:home|split|receipt|items|share)|brand\/(?:billy|billington-wordmark))\.png$/;
+
+/** Images shipped with the app, so a project can name them instead of embedding their bytes. */
+export function isBundledImageUrl(value: string): boolean {
+	return BUNDLED_IMAGE.test(value);
+}
+
+/** Only bundled images or embedded PNG/JPEG/WebP data URLs with a real signature. */
 export function imageUrl(value: unknown): string {
 	if (typeof value !== 'string') throw new Error(INVALID_IMAGE);
-	if (/^\/demo\/(home|split|receipt|items|share)\.png$/.test(value)) return value;
+	if (isBundledImageUrl(value)) return value;
 	const prefix = /^data:image\/(png|jpeg|webp);base64,/.exec(value);
 	if (!prefix) throw new Error(INVALID_IMAGE);
 	const payload = value.slice(prefix[0].length);

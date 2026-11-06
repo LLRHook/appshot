@@ -2,10 +2,13 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import SlidePreview from '$lib/components/SlidePreview.svelte';
 	import { getStudio } from '$lib/editor/studio.svelte';
+	import { targetPickerOptions, type DeviceId } from '$lib/model/devices';
+	import StorePreview from './StorePreview.svelte';
 
 	const studio = getStudio();
 	let joined = $state(true);
 	let zoom = $state(100);
+	let storePreview = $state(false);
 </script>
 
 <main class="workspace">
@@ -16,7 +19,7 @@
 				class="campaign-name"
 				aria-label="Campaign name"
 				maxlength="50"
-				value={studio.composition.name}
+				value={studio.store.project.name}
 				onchange={(event) => studio.setName(event.currentTarget.value)}
 			/>
 			<p>A great first impression starts here.</p>
@@ -32,6 +35,20 @@
 			>
 		</div>
 		<div class="canvas-tools">
+			<select
+				id="output-size"
+				aria-label="Active output"
+				value={studio.targetId}
+				onchange={(event) => studio.chooseDevice(event.currentTarget.value as DeviceId)}
+				>{#each targetPickerOptions(studio.store.project.targets) as target (target.id)}<option
+						value={target.id}>{target.label} · {target.width} × {target.height}</option
+					>{/each}</select
+			>
+			<button
+				class:enabled={storePreview}
+				onclick={() => (storePreview = !storePreview)}
+				aria-pressed={storePreview}><Icon name="grid" size={14} />Store preview</button
+			>
 			<button class:enabled={joined} onclick={() => (joined = !joined)} aria-pressed={joined}
 				><Icon name="link" size={14} />Seam preview</button
 			><span class="toolbar-divider"></span><button
@@ -57,6 +74,8 @@
 		</div>
 	</div>
 	<div
+		id="frames"
+		tabindex="-1"
 		class="stage"
 		ondragover={(event) => event.preventDefault()}
 		ondrop={(event) => {
@@ -66,58 +85,67 @@
 		role="region"
 		aria-label="Campaign canvas"
 	>
-		<div class="canvas-strip" style:--frame-width={`${(204 * zoom) / 100}px`}>
-			{#each studio.composition.slides as item, index (item.id)}
-				{@const connectedBefore =
-					joined &&
-					studio.composition.continuityMode === 'paired' &&
-					studio.composition.panorama?.rightId === item.id}
-				{@const connectedAfter =
-					joined &&
-					studio.composition.continuityMode === 'paired' &&
-					studio.composition.panorama?.leftId === item.id}
-				<div
-					class="frame-column"
-					class:connected-before={connectedBefore}
-					class:connected-after={connectedAfter}
-				>
-					<div class="frame-label">
-						<span>{String(index + 1).padStart(2, '0')}</span><span
-							>{item.label ?? 'Screenshot'}</span
-						>{#if studio.composition.panorama?.leftId === item.id && studio.composition.continuityMode === 'paired'}<Icon
-								name="link"
-								size={13}
-							/>{/if}
-					</div>
-					<button
-						class="frame"
-						class:selected={index === studio.selected}
-						style:aspect-ratio={`${studio.device.width}/${studio.device.height}`}
-						onclick={() => studio.store.select(index)}
-						aria-label={`Select screenshot ${index + 1}`}
-						aria-pressed={index === studio.selected}
-						><SlidePreview
-							composition={studio.composition}
-							{index}
-							width={Math.round((528 * zoom) / 100)}
-						/></button
+		{#if storePreview}
+			<StorePreview
+				composition={studio.composition}
+				appName={studio.store.project.appName ?? studio.store.project.name}
+				selected={studio.selected}
+				onselect={(index) => studio.store.select(index)}
+			/>
+		{:else}
+			<div class="canvas-strip" style:--frame-width={`${(204 * zoom) / 100}px`}>
+				{#each studio.composition.slides as item, index (item.id)}
+					{@const connectedBefore =
+						joined &&
+						studio.composition.continuityMode === 'paired' &&
+						studio.composition.panorama?.rightId === item.id}
+					{@const connectedAfter =
+						joined &&
+						studio.composition.continuityMode === 'paired' &&
+						studio.composition.panorama?.leftId === item.id}
+					<div
+						class="frame-column"
+						class:connected-before={connectedBefore}
+						class:connected-after={connectedAfter}
 					>
-					<div class="frame-meta">
-						<span
-							>{index === studio.selected
-								? 'Editing this frame'
-								: `${studio.device.width} × ${studio.device.height}`}</span
-						>{#if index === studio.selected}<span class="selected-dot"></span>{/if}
+						<div class="frame-label">
+							<span>{String(index + 1).padStart(2, '0')}</span><span
+								>{item.label ?? 'Screenshot'}</span
+							>{#if studio.composition.panorama?.leftId === item.id && studio.composition.continuityMode === 'paired'}<Icon
+									name="link"
+									size={13}
+								/>{/if}
+						</div>
+						<button
+							class="frame"
+							class:selected={index === studio.selected}
+							style:aspect-ratio={`${studio.device.width}/${studio.device.height}`}
+							onclick={() => studio.store.select(index)}
+							aria-label={`Select screenshot ${index + 1}`}
+							aria-pressed={index === studio.selected}
+							><SlidePreview
+								composition={studio.composition}
+								{index}
+								width={Math.round((528 * zoom) / 100)}
+							/></button
+						>
+						<div class="frame-meta">
+							<span
+								>{index === studio.selected
+									? 'Editing this frame'
+									: `${studio.device.width} × ${studio.device.height}`}</span
+							>{#if index === studio.selected}<span class="selected-dot"></span>{/if}
+						</div>
 					</div>
-				</div>
-			{/each}
-			{#if studio.composition.slides.length < 10}<button
-					class="add-frame"
-					onclick={() => studio.addSlide()}
-					aria-label="Add blank screenshot"
-					><Icon name="plus" size={25} /><span>New frame</span></button
-				>{/if}
-		</div>
+				{/each}
+				{#if studio.composition.slides.length < 10}<button
+						class="add-frame"
+						onclick={() => studio.addSlide()}
+						aria-label="Add blank screenshot"
+						><Icon name="plus" size={25} /><span>New frame</span></button
+					>{/if}
+			</div>
+		{/if}
 	</div>
 	<div class="workspace-bottom">
 		<div>
@@ -136,3 +164,10 @@
 		>
 	</div>
 </main>
+
+<style>
+	#output-size {
+		width: clamp(110px, 16vw, 200px);
+		max-width: 200px;
+	}
+</style>

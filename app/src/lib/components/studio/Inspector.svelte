@@ -1,13 +1,12 @@
 <script lang="ts">
 	import Icon from '$lib/components/Icon.svelte';
 	import { getStudio } from '$lib/editor/studio.svelte';
-	import { DEVICES, type DeviceId } from '$lib/model/devices';
 	import { LINEN_PHONE_BOUNDS } from '$lib/model/linen';
 	import InspectorComposition from './InspectorComposition.svelte';
 	import InspectorContent from './InspectorContent.svelte';
+	import OutputTargets from './OutputTargets.svelte';
 
 	const studio = getStudio();
-	let tab = $state<'content' | 'device'>('content');
 </script>
 
 <aside class="inspector">
@@ -25,14 +24,18 @@
 		>
 	</div>
 	<div class="inspector-tabs">
-		<button class:active={tab === 'content'} onclick={() => (tab = 'content')}
+		<button
+			class:active={studio.inspectorTab === 'content'}
+			onclick={() => (studio.inspectorTab = 'content')}
 			><Icon name="type" size={15} />Content</button
-		><button class:active={tab === 'device'} onclick={() => (tab = 'device')}
+		><button
+			class:active={studio.inspectorTab === 'device'}
+			onclick={() => (studio.inspectorTab = 'device')}
 			><Icon name="sliders" size={15} />Composition</button
 		>
 	</div>
 	<div class="inspector-scroll">
-		{#if tab === 'content'}
+		{#if studio.inspectorTab === 'content'}
 			<InspectorContent />
 		{:else}
 			<InspectorComposition />
@@ -129,20 +132,18 @@
 					>
 				</div>{/if}
 		</section>
-		<section class="control-section output-control">
-			<label class="field-label" for="output-size">Export size <span>ENTIRE SET</span></label
-			><select
-				id="output-size"
-				value={studio.composition.device}
-				onchange={(event) => studio.chooseDevice(event.currentTarget.value as DeviceId)}
-				>{#each Object.values(DEVICES) as size (size.id)}<option value={size.id}
-						>{size.label} · {size.width} × {size.height}</option
-					>{/each}</select
-			>
-			<p class="field-help">
-				<Icon name="check" size={12} />Exact dimensions. Full-resolution PNGs.
-			</p>
-		</section>
+		<OutputTargets
+			targets={studio.targets}
+			active={studio.targetId}
+			issues={studio.issues}
+			sourceCounts={studio.sourceCounts}
+			slideCount={studio.composition.slides.length}
+			checking={studio.checkingReadiness}
+			onselect={(id) => studio.chooseDevice(id)}
+			onadd={(id) => studio.chooseDevice(id)}
+			onremove={(id) => studio.removeOutput(id)}
+			onfix={(issue) => studio.focusIssue(issue)}
+		/>
 	</div>
 	<div class="inspector-footer">
 		<div>

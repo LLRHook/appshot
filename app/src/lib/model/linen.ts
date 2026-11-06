@@ -458,6 +458,17 @@ export function linenHeadlineSpans(line: string, where = 'The headline'): LinenS
 	return parts.map((text, index) => ({ text, italic: index % 2 === 1 }));
 }
 
+/**
+ * Copy for a style without an italic accent: balanced `*` markers come off and the stored text
+ * is untouched. An odd marker on a line is left visible, because it may be a real asterisk.
+ */
+export function linenPlainText(text: string): string {
+	return text
+		.split('\n')
+		.map((line) => ((line.match(/\*/g)?.length ?? 0) % 2 === 0 ? line.replaceAll('*', '') : line))
+		.join('\n');
+}
+
 /* ------------------------------------------------------------------ geometry */
 
 export interface LinenScale {

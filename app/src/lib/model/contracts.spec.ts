@@ -1,80 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type {
-	AssetId,
-	ImageLayer,
-	ProjectAsset,
-	ProjectForTarget,
-	ProjectV2,
-	SlideVariant,
-	StoredPanorama
-} from './contracts';
+import type { ProjectAsset, ProjectForTarget, ProjectV2, StoredPanorama } from './contracts';
 import { DEVICES, type DeviceId } from './devices';
 import { parseProject } from './project';
-import type { Composition, ImageRef, Panorama, Slide } from './types';
+import { projectForTarget } from './targets';
 
-/**
- * Not product code. This spec proves the frozen types are implementable: a minimal projection,
- * typed `ProjectForTarget`, must produce a document the unchanged `parseProject` accepts while
- * honoring the documented rules. The real `projectForTarget` belongs to the model owner.
- */
-const asImageRef = (asset: ProjectAsset): ImageRef => ({
-	id: asset.id,
-	blobUrl: asset.url,
-	naturalWidth: asset.naturalWidth,
-	naturalHeight: asset.naturalHeight
-});
-
-const referenceProjection: ProjectForTarget = (project, targetId) => {
-	if (!project.targets.includes(targetId)) throw new Error(`Undeclared target: ${targetId}`);
-	const image = (id: AssetId | undefined) => (id ? asImageRef(project.assets[id]) : undefined);
-	const slides = project.slides.map((slide): Slide => {
-		const { variants, ...shared } = slide;
-		const variant: SlideVariant = variants?.[targetId] ?? {};
-		const { source, linen, layers, ...overrides } = variant;
-		const primaryImage = image(source?.asset);
-		return {
-			...shared,
-			...overrides,
-			device: targetId,
-			continuity: { inset: 0 },
-			...(linen && shared.linen ? { linen: { ...shared.linen, ...linen } } : {}),
-			...(primaryImage ? { primaryImage } : {}),
-			...(layers
-				? {
-						layers: layers.map(
-							(layer): ImageLayer => ({ ...layer, image: image(layer.image) as ImageRef })
-						)
-					}
-				: {})
-		};
-	});
-	const pano = project.panorama;
-	const variant = pano?.variants?.[targetId];
-	const panoImage = image(variant?.source?.asset);
-	const linenPhone = variant?.linenPhone ?? pano?.linenPhone;
-	const panorama: Panorama | undefined =
-		pano && panoImage
-			? {
-					leftId: pano.leftId,
-					rightId: pano.rightId,
-					image: panoImage,
-					offset: variant?.offset ?? pano.offset,
-					scale: variant?.scale ?? pano.scale,
-					tilt: variant?.tilt ?? pano.tilt,
-					...(linenPhone ? { linenPhone } : {})
-				}
-			: undefined;
-	const composition: Composition = {
-		version: 1,
-		name: project.appName ?? project.name,
-		style: project.style,
-		accent: project.accent,
-		device: targetId,
-		slides,
-		continuityMode: panorama ? project.continuityMode : 'none'
-	};
-	return panorama ? { ...composition, panorama } : composition;
-};
+/** Proves the frozen types are implementable: the real projection satisfies the alias. */
+const referenceProjection: ProjectForTarget = projectForTarget;
 
 const png = (id: string, naturalWidth: number, naturalHeight: number): ProjectAsset => ({
 	id,
@@ -199,13 +130,15 @@ describe('projection contract', () => {
 
 	it('refuses a target the project did not declare', () => {
 		const undeclared: DeviceId = 'iphone-6.7';
-		expect(() => referenceProjection(fixture(), undeclared)).toThrow(/Undeclared/);
+		expect(() => referenceProjection(fixture(), undeclared)).toThrow(/not one of/);
 	});
 
-	it('drops reserved layers at the current parser until the model owner adds them', () => {
-		// Pins the documented hazard: a field needs a parser change to survive persistence.
+	it('keeps projected layers through the parser, closing the hazard this spec used to pin', () => {
+		// A field needs a parser change to survive persistence; `layers` now has one.
 		const composition = referenceProjection(fixture(), 'iphone-6.9');
 		expect(composition.slides[0].layers).toHaveLength(1);
-		expect(parseProject(JSON.stringify(composition)).slides[0].layers).toBeUndefined();
+		expect(parseProject(JSON.stringify(composition)).slides[0].layers).toEqual(
+			composition.slides[0].layers
+		);
 	});
 });

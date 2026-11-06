@@ -1498,7 +1498,9 @@ details.advanced .field-label:not(:first-child) {
 		padding-top: 15px;
 	}
 	.style-list {
-		grid-template-columns: repeat(6, 180px);
+		grid-template-columns: none;
+		grid-auto-flow: column;
+		grid-auto-columns: 180px;
 		overflow-x: auto;
 		padding: 3px;
 		margin-top: 14px;
@@ -1519,17 +1521,31 @@ details.advanced .field-label:not(:first-child) {
 	.campaign-heading {
 		padding: 23px 20px;
 	}
+	.campaign-heading > div {
+		min-width: 0;
+	}
 	.campaign-name {
 		font-size: 26px;
 	}
 	.campaign-heading .button {
 		font-size: 9px;
+		flex-shrink: 0;
 	}
 	.canvas-toolbar {
 		padding: 10px 15px;
+		flex-direction: column;
+		align-items: stretch;
 	}
 	.canvas-tools {
-		gap: 2px;
+		gap: 6px;
+		flex-wrap: wrap;
+		width: 100%;
+	}
+	.canvas-toolbar .canvas-tools #output-size {
+		flex: 1 0 100%;
+		width: 100%;
+		max-width: none;
+		margin-left: 0;
 	}
 	.canvas-tools > button:not(.icon-button) {
 		font-size: 8px;

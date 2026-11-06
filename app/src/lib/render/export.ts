@@ -1,8 +1,20 @@
-import type { Composition, ImageRef } from '../model/types';
-import { parseProject } from '../model/project';
+import { dataUrlFromBytes } from '../model/assets';
+import { sniffImage } from '../model/capture';
 import { DEVICES } from '../model/devices';
+import { parseProject } from '../model/project';
+import type { Composition, ImageRef } from '../model/types';
 import { renderSlide } from './canvas';
-import { createZip, type ZipEntry } from './zip';
+import {
+	createExportMatrix,
+	PROJECT_FILE,
+	safeFilename,
+	type ExportRuntime
+} from './export-matrix';
+import { verifyOpaquePng } from './png';
+import { preflight } from './preflight';
+import { isZipFile, readZipEntry, ZipWriter } from './zip';
+
+export { safeFilename };
 
 export function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
 	return new Promise((resolve, reject) => {
@@ -28,24 +40,47 @@ export function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
 	});
 }
 
-export async function exportSlide(composition: Composition, index: number): Promise<Blob> {
+/** Paint one frame at its exact size through the one renderer, and encode it. */
+async function renderPng(composition: Composition, index: number): Promise<Uint8Array> {
 	const canvas = document.createElement('canvas');
 	try {
 		await renderSlide(canvas, composition, index);
-		return await canvasToPng(canvas);
+		return new Uint8Array(await (await canvasToPng(canvas)).arrayBuffer());
 	} finally {
 		canvas.width = 0;
 		canvas.height = 0;
 	}
 }
 
-function blobToDataUrl(blob: Blob): Promise<string> {
-	return new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onload = () => resolve(String(reader.result));
-		reader.onerror = () => reject(new Error('A screenshot could not be saved into the project.'));
-		reader.readAsDataURL(blob);
-	});
+/** One frame's final file, decoded to prove it is what it should be. Failures name the frame. */
+async function verifiedFrame(composition: Composition, index: number) {
+	const encoded = await renderPng(composition, index);
+	try {
+		return await verifyOpaquePng(encoded, DEVICES[composition.device]);
+	} catch (error) {
+		throw new Error(
+			`Frame ${index + 1} could not be exported. ${error instanceof Error ? error.message : ''}`.trim(),
+			{ cause: error }
+		);
+	}
+}
+
+export async function exportSlide(composition: Composition, index: number): Promise<Blob> {
+	const { bytes } = await verifiedFrame(composition, index);
+	return new Blob([bytes], { type: 'image/png' });
+}
+
+const MISSING_ORIGINAL =
+	'An original screenshot is missing. Add it again to save the complete project.';
+
+/** Fetch an image once, however many frames and layers use it, as a data URL of its real format. */
+async function embeddedImage(url: string): Promise<string> {
+	const response = await fetch(url).catch(() => null);
+	if (!response?.ok) throw new Error(MISSING_ORIGINAL);
+	const bytes = new Uint8Array(await response.arrayBuffer());
+	const sniffed = sniffImage(bytes);
+	if (!sniffed) throw new Error('A screenshot could not be saved into the project.');
+	return dataUrlFromBytes(bytes, sniffed.mime);
 }
 
 /** Resolve local blob/static URLs so the project can reopen on another computer. */
@@ -56,13 +91,7 @@ export async function portableComposition(composition: Composition): Promise<Com
 		if (!image || image.blobUrl.startsWith('data:')) return;
 		let pending = converted.get(image.blobUrl);
 		if (!pending) {
-			pending = fetch(image.blobUrl).then(async (response) => {
-				if (!response.ok)
-					throw new Error(
-						'An original screenshot is missing. Add it again to save the complete project.'
-					);
-				return blobToDataUrl(await response.blob());
-			});
+			pending = embeddedImage(image.blobUrl);
 			converted.set(image.blobUrl, pending);
 		}
 		image.blobUrl = await pending;
@@ -72,23 +101,12 @@ export async function portableComposition(composition: Composition): Promise<Com
 			.flatMap((slide) => [
 				embed(slide.primaryImage),
 				embed(slide.continuity.incoming),
-				embed(slide.continuity.outgoing)
+				embed(slide.continuity.outgoing),
+				...(slide.layers ?? []).map((layer) => embed(layer.image))
 			])
 			.concat(embed(copy.panorama?.image))
 	);
 	return parseProject(JSON.stringify(copy));
-}
-
-export function safeFilename(name: string): string {
-	return (
-		name
-			.normalize('NFKD')
-			.replace(/[\u0300-\u036f]/g, '')
-			.replace(/[^a-zA-Z0-9_-]+/g, '-')
-			.replace(/^-+|-+$/g, '')
-			.slice(0, 70)
-			.toLowerCase() || 'campaign'
-	);
 }
 
 /** Actual PNG files at device resolution, plus a self-contained editable project. */
@@ -97,23 +115,22 @@ export async function exportCampaign(
 	onProgress?: (done: number, total: number) => void
 ): Promise<Blob> {
 	if (!composition.slides.length) throw new Error('Add a screenshot before exporting.');
-	const entries: ZipEntry[] = [];
+	const zip = new ZipWriter();
 	const { width, height } = DEVICES[composition.device];
 	onProgress?.(0, composition.slides.length);
 	for (let index = 0; index < composition.slides.length; index++) {
-		const blob = await exportSlide(composition, index);
-		entries.push({
-			name: `${String(index + 1).padStart(2, '0')}-${safeFilename(composition.slides[index].label || composition.name)}-${width}x${height}.png`,
-			data: new Uint8Array(await blob.arrayBuffer())
-		});
+		const { bytes } = await verifiedFrame(composition, index);
+		zip.add(
+			`${String(index + 1).padStart(2, '0')}-${safeFilename(composition.slides[index].label || composition.name)}-${width}x${height}.png`,
+			bytes
+		);
 		onProgress?.(index + 1, composition.slides.length);
 	}
-	entries.push({
-		name: 'project.json',
-		data: new TextEncoder().encode(JSON.stringify(await portableComposition(composition)))
-	});
-	const zip = createZip(entries);
-	return new Blob([zip.buffer], { type: 'application/zip' });
+	zip.add(
+		PROJECT_FILE,
+		new TextEncoder().encode(JSON.stringify(await portableComposition(composition)))
+	);
+	return zip.finish();
 }
 
 /** Presentation contact sheet; individual App Store PNGs remain available in the ZIP. */
@@ -173,4 +190,42 @@ export async function exportContactSheet(composition: Composition): Promise<Blob
 		canvas.width = 0;
 		canvas.height = 0;
 	}
+}
+
+/** What the browser's own decoder makes of a finished file. */
+async function decodedSize(bytes: Uint8Array<ArrayBuffer>) {
+	const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+	try {
+		return { width: bitmap.width, height: bitmap.height };
+	} finally {
+		bitmap.close();
+	}
+}
+
+const browserRuntime: ExportRuntime = {
+	renderPng,
+	decodedSize,
+	preflight,
+	now: () => new Date()
+};
+
+/**
+ * Every frame of every output: class folders, a manifest and an editable project in one ZIP. A
+ * `store` export of a campaign with blocking findings returns `blocked` before anything is painted.
+ * See `createExportMatrix`.
+ */
+export const exportMatrix = createExportMatrix(browserRuntime);
+
+/**
+ * The text of a project file from whatever Open project was given: `.appshot.json`, a `project.json`
+ * or a whole exported ZIP. Feed the result to `CampaignPersistence.importPortable`.
+ */
+export async function projectTextFromFile(file: Blob): Promise<string> {
+	if (!(await isZipFile(file))) return file.text();
+	const bytes = await readZipEntry(file, PROJECT_FILE);
+	if (!bytes)
+		throw new Error(
+			`This ZIP has no ${PROJECT_FILE}, so it cannot be opened. Export again, or open the project file itself.`
+		);
+	return new TextDecoder().decode(bytes);
 }

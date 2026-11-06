@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { getStudio } from '$lib/editor/studio.svelte';
+	import CheckControls from '$lib/components/CheckControls.svelte';
+	import LayerControls from './LayerControls.svelte';
 	import {
 		LINEN_LAYOUT_BOUNDS,
 		LINEN_PHONE_BOUNDS,
@@ -27,7 +29,16 @@
 	];
 </script>
 
-{#if studio.isLinen}
+<LayerControls />
+
+{#if studio.isCheck}
+	<CheckControls
+		settings={studio.check}
+		layers={studio.slide.layers ?? []}
+		source={studio.displayedImage}
+		onchange={(patch, coalesce) => studio.patchCheck(patch, coalesce)}
+	/>
+{:else if studio.isLinen}
 	<section class="control-section">
 		<div class="field-label">
 			Phone{#if studio.isLinked}<span>SHARED ACROSS BOTH FRAMES</span>{/if}
